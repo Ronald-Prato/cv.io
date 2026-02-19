@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { Send } from "lucide-react";
+import { LayoutTemplate, MessageSquareText, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 type ChatRole = "assistant" | "user";
@@ -183,21 +184,40 @@ async function parseApiError(response: Response): Promise<string | null> {
 }
 
 export function ChatPanel({ cvId }: ChatPanelProps) {
+  const BOTTOM_SCROLL_THRESHOLD = 80;
   const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamStarted, setStreamStarted] = useState(false);
   const [messageListRef] = useAutoAnimate<HTMLDivElement>({
     duration: 260,
     easing: "ease-out",
   });
   const listEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const shouldAutoScrollRef = useRef(true);
 
   const canWrite = Boolean(cvId);
   const locale = useMemo(() => parseLocale(i18n.resolvedLanguage), [i18n.resolvedLanguage]);
+  const setMessageContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      messageListRef(node);
+      scrollContainerRef.current = node;
+    },
+    [messageListRef]
+  );
+
+  function scrollToBottom(behavior: ScrollBehavior = "smooth") {
+    listEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }
+
+  function isNearBottom(element: HTMLDivElement): boolean {
+    const distanceToBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    return distanceToBottom <= BOTTOM_SCROLL_THRESHOLD;
+  }
 
   useEffect(() => {
     const initialMessage: ChatMessage = {
@@ -212,15 +232,17 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
     setMessages([initialMessage]);
     setPrompt("");
     setIsStreaming(false);
-    setStreamStarted(false);
+    shouldAutoScrollRef.current = true;
     requestAnimationFrame(() => {
+      scrollToBottom("auto");
       inputRef.current?.focus();
     });
   }, [cvId, locale, t]);
 
   useEffect(() => {
-    listEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, isStreaming, streamStarted]);
+    if (!shouldAutoScrollRef.current) return;
+    scrollToBottom("smooth");
+  }, [messages, isStreaming]);
 
   useEffect(() => {
     return () => {
@@ -259,9 +281,10 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
 
     setPrompt("");
     setIsStreaming(true);
-    setStreamStarted(false);
+    shouldAutoScrollRef.current = true;
     setMessages((previous) => [...previous, userMessage, assistantMessage]);
     requestAnimationFrame(() => {
+      scrollToBottom("auto");
       inputRef.current?.focus();
     });
 
@@ -303,7 +326,6 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
         if (!chunk) continue;
 
         fullResponse += chunk;
-        setStreamStarted(true);
 
         setMessages((previous) =>
           previous.map((message) =>
@@ -336,7 +358,6 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
       });
     } finally {
       setIsStreaming(false);
-      setStreamStarted(false);
       abortControllerRef.current = null;
       requestAnimationFrame(() => {
         inputRef.current?.focus();
@@ -348,10 +369,53 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
     <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.4),transparent_48%)] dark:bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.07),transparent_42%)]" />
 
-      <div className="relative mx-auto flex min-h-0 w-full max-w-[700px] flex-1 flex-col px-4 py-4 md:py-6">
+      <TooltipProvider>
+        <div className="absolute left-4 top-4 z-20 flex items-center gap-2 md:left-6 md:top-6">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={t("home.viewChat")}
+                title={t("home.viewChat")}
+                aria-pressed
+                className="h-9 w-9 rounded-lg"
+              >
+                <MessageSquareText className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("home.viewChat")}</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={t("home.viewTemplates")}
+                title={t("home.viewTemplates")}
+                aria-pressed={false}
+                className="h-9 w-9 rounded-lg"
+              >
+                <LayoutTemplate className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("home.viewTemplates")}</TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
+
+      <div className="relative mx-auto flex min-h-0 w-full max-w-[850px] flex-1 flex-col px-4 pb-4 pt-16 md:pb-6 md:pt-20">
         <div
-          ref={messageListRef}
-          className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1"
+          ref={setMessageContainerRef}
+          onScroll={() => {
+            const element = scrollContainerRef.current;
+            if (!element) return;
+            shouldAutoScrollRef.current = isNearBottom(element);
+          }}
+          className="chat-scroll min-h-0 flex-1 space-y-5 overflow-y-auto pr-3 md:pr-4"
         >
           {messages.map((message) =>
             message.role === "user" ? (

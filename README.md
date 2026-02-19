@@ -74,6 +74,26 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Convex MCP (CV by ID)
+
+This project exposes a dedicated query to fetch one CV by ID:
+
+- `cvs:getById`
+- args: `{ "cvId": "<your_convex_cv_id>" }`
+
+Start the Convex MCP server:
+
+```bash
+npm run mcp:convex
+```
+
+In your MCP-enabled chat client, call `cvs:getById` and ask for Markdown output with a JSON code block, for example:
+
+```md
+Trae el CV con este id usando MCP y devuélveme el resultado en Markdown con bloque ```json```.
+cvId: "<your_convex_cv_id>"
+```
+
 ## Near-Term Roadmap
 
 - Connect chat UI with real conversation state and Convex mutations/queries.

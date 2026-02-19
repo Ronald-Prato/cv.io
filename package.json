@@ -6,7 +6,8 @@
     "dev": "next dev --port 3030",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "mcp:convex": "npx convex mcp start --project-dir ."
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.9.0",
