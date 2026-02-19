@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { Moon, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +37,7 @@ function formatCvDateLabel(createdAt: number): string {
 export function Sidebar() {
   const { t } = useTranslation();
   const cvs = useQuery(api.cvs.listAll);
+  const pathname = usePathname();
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") {
       return "light";
@@ -80,15 +83,24 @@ export function Sidebar() {
         </div>
       ) : (
         <div className="space-y-2">
-          {cvs.map((cv) => (
-            <button
-              key={cv._id}
-              type="button"
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
-            >
-              {formatCvDateLabel(cv.createdAt)}
-            </button>
-          ))}
+          {cvs.map((cv) => {
+            const href = `/cv/${cv._id}`;
+            const isActive = pathname === href;
+
+            return (
+              <Link
+                key={cv._id}
+                href={href}
+                className={`block w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                  isActive
+                    ? "border-primary/40 bg-secondary text-secondary-foreground"
+                    : "border-border bg-surface text-foreground hover:bg-muted"
+                }`}
+              >
+                {formatCvDateLabel(cv.createdAt)}
+              </Link>
+            );
+          })}
         </div>
       )}
 

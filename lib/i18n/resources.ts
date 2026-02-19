@@ -43,6 +43,18 @@ export const resources = {
         assistantThinking: "Assistant is thinking...",
         assistantAutoReply:
           "Thanks. I can help refine your CV summary, achievements, and skills based on your target role.",
+        selectCvMessage: "Pick a CV from the sidebar to start writing in chat.",
+        initialCvMessage: "How can I help you with this CV today?",
+        writeOnlyOnCvRoute: "You can only write when you are on route /cv/[id].",
+        modelThinking: "The model is thinking...",
+        chatFailedTitle: "Could not complete chat request",
+        chatFailedNetwork: "Connection to chat service failed. Please try again.",
+        chatFailedUnexpected: "Unexpected error while processing chat request.",
+        chatMissingApiKey:
+          "OPENAI_API_KEY is missing on the server. Chat responses are disabled.",
+        chatInvalidRequest: "Invalid chat request payload.",
+        chatCvNotFound: "Requested CV was not found.",
+        chatEmptyResponse: "The model returned an empty response.",
       },
     },
   },
@@ -83,6 +95,22 @@ export const resources = {
         assistantThinking: "El asistente está pensando...",
         assistantAutoReply:
           "Gracias. Puedo ayudarte a mejorar el resumen, logros y habilidades de tu CV según el rol objetivo.",
+        selectCvMessage:
+          "Selecciona un CV desde la barra lateral para empezar a escribir en el chat.",
+        initialCvMessage: "Cómo puedo ayudarte con este CV hoy?",
+        writeOnlyOnCvRoute:
+          "Solo puedes escribir cuando estás dentro de la ruta /cv/[id].",
+        modelThinking: "El modelo está pensando...",
+        chatFailedTitle: "No se pudo completar la solicitud del chat",
+        chatFailedNetwork:
+          "Falló la conexión con el servicio de chat. Intenta nuevamente.",
+        chatFailedUnexpected:
+          "Ocurrió un error inesperado al procesar la solicitud del chat.",
+        chatMissingApiKey:
+          "Falta OPENAI_API_KEY en el servidor. Las respuestas del chat están deshabilitadas.",
+        chatInvalidRequest: "La solicitud del chat es inválida.",
+        chatCvNotFound: "No se encontró el CV solicitado.",
+        chatEmptyResponse: "El modelo devolvió una respuesta vacía.",
       },
     },
   },
