@@ -1,185 +1,329 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useAction, useMutation } from "convex/react";
+import { LoaderCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { H1, H2, Muted } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 
-const myCvs = [
-  "Senior Product Designer",
-  "Frontend Engineer",
-  "AI Product Manager",
-  "Data Analyst",
-];
-
-const sampleMessages = [
-  {
-    role: "assistant",
-    content:
-      "Hola, puedo ayudarte a construir tu CV. Puedes subir un PDF con tu experiencia o contarme tu perfil en texto.",
-  },
-  {
-    role: "user",
-    content:
-      "Quiero un CV para una posicion de Product Designer con foco en research y sistemas de diseno.",
-  },
-];
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
 
 export default function Home() {
+  const { t } = useTranslation();
   const [dragActive, setDragActive] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
+  const [hasUploadedCv, setHasUploadedCv] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isAssistantTyping, setIsAssistantTyping] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const dragDepthRef = useRef(0);
+  const pendingReplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const saveUploadedCv = useMutation(api.files.saveUploadedCv);
+  const parseUploadedPdfToCv = useAction(api.cvParser.parseUploadedPdfToCv);
+  const hasMessages = messages.length > 0;
+  const hasPdf = selectedPdf !== null;
+  const canAcceptPdf = !hasPdf && !hasUploadedCv && !hasMessages;
+  const [messageListRef] = useAutoAnimate<HTMLDivElement>({
+    duration: 260,
+    easing: "ease-out",
+  });
+  const [composerRef] = useAutoAnimate<HTMLDivElement>({
+    duration: 220,
+    easing: "ease-out",
+  });
 
-  const uploadedLabel = useMemo(() => {
-    if (uploadedFiles.length === 0) return "No files uploaded yet.";
-    if (uploadedFiles.length === 1) return uploadedFiles[0].name;
-    return `${uploadedFiles.length} PDF files selected`;
-  }, [uploadedFiles]);
+  const uploadedLabel = hasPdf ? selectedPdf.name : t("home.attachPdfLabel");
+
+  useEffect(() => {
+    return () => {
+      if (pendingReplyTimerRef.current) {
+        clearTimeout(pendingReplyTimerRef.current);
+      }
+    };
+  }, []);
+
+  function pushMessage(role: ChatMessage["role"], content: string) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        role,
+        content,
+      },
+    ]);
+  }
 
   function addFiles(files: FileList | null) {
+    if (!canAcceptPdf) return;
     if (!files) return;
     const pdfFiles = Array.from(files).filter(
       (file) => file.type === "application/pdf"
     );
-    setUploadedFiles((prev) => [...prev, ...pdfFiles]);
+    if (pdfFiles.length === 0) return;
+    setSelectedPdf(pdfFiles[0]);
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLElement>) {
+    if (!canAcceptPdf) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLElement>) {
+    if (!canAcceptPdf) return;
+    event.preventDefault();
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
+      setDragActive(false);
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    if (!canAcceptPdf) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+    addFiles(event.dataTransfer.files);
+  }
+
+  function handleSendMessage() {
+    const text = prompt.trim();
+    if (!text) return;
+
+    if (pendingReplyTimerRef.current) {
+      clearTimeout(pendingReplyTimerRef.current);
+    }
+
+    pushMessage("user", text);
+    setPrompt("");
+    setIsAssistantTyping(true);
+
+    pendingReplyTimerRef.current = setTimeout(() => {
+      pushMessage("assistant", t("home.assistantAutoReply"));
+      setIsAssistantTyping(false);
+      pendingReplyTimerRef.current = null;
+    }, 700);
+  }
+
+  async function handleUploadCv() {
+    if (!selectedPdf || isUploading) return;
+
+    setIsUploading(true);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": selectedPdf.type || "application/pdf",
+        },
+        body: selectedPdf,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(t("home.uploadFailed"));
+      }
+
+      const { storageId } = (await uploadResponse.json()) as {
+        storageId: Id<"_storage">;
+      };
+      const uploadId = await saveUploadedCv({
+        storageId,
+        fileName: selectedPdf.name,
+        fileType: selectedPdf.type || "application/pdf",
+        fileSize: selectedPdf.size,
+      });
+      await parseUploadedPdfToCv({ uploadId });
+
+      toast.success(t("home.uploadAndParseSuccess"));
+      pushMessage("assistant", t("home.uploadCompleteMessage"));
+      setHasUploadedCv(true);
+      setSelectedPdf(null);
+    } catch (error) {
+      console.error(error);
+      toast.error(t("home.uploadError"));
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-background p-3 md:p-5">
-      <main className="mx-auto flex h-[calc(100vh-1.5rem)] max-w-[1400px] overflow-hidden rounded-2xl border border-border bg-surface shadow-sm md:h-[calc(100vh-2.5rem)]">
-        <aside className="flex w-[300px] shrink-0 flex-col border-r border-border bg-surface-elevated p-4 md:w-[320px] md:p-6">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground">
-              CV
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">cv.io</p>
-              <Muted className="text-xs">AI resume workspace</Muted>
-            </div>
-          </div>
+    <div className="min-h-screen w-full bg-background">
+      <main className="flex h-screen w-full overflow-hidden border border-border bg-surface shadow-sm">
+        <Sidebar />
 
-          <div className="rounded-xl border border-border bg-surface p-3">
-            <p className="font-medium text-foreground">Jane Cooper</p>
-            <Muted className="mt-0.5 text-xs">jane@cv.io</Muted>
-          </div>
+        <section
+          onDragEnter={canAcceptPdf ? handleDragEnter : undefined}
+          onDragOver={canAcceptPdf ? (event) => event.preventDefault() : undefined}
+          onDragLeave={canAcceptPdf ? handleDragLeave : undefined}
+          onDrop={canAcceptPdf ? handleDrop : undefined}
+          className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-background"
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.4),transparent_48%)] dark:bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.07),transparent_42%)]" />
 
-          <div className="my-5 h-px bg-border" />
+          {!hasMessages ? (
+            <div className="relative mx-auto flex h-full w-full max-w-4xl flex-col justify-center px-4 pb-16 sm:px-6 lg:px-8 animate-fade-in-up">
+              <h1 className="mb-8 text-center text-3xl font-medium tracking-tight text-foreground/95 sm:text-4xl transition-all duration-300">
+                {hasPdf ? t("home.titleReady") : t("home.titleQuestion")}
+              </h1>
 
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <H2 className="text-lg">My CVs</H2>
-            <Button size="sm">New</Button>
-          </div>
-
-          <div className="space-y-2">
-            {myCvs.map((cv) => (
-              <button
-                key={cv}
-                type="button"
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+              <div
+                className={cn(
+                  "rounded-3xl border bg-surface/75 shadow-lg backdrop-blur-sm transition-all duration-300",
+                  dragActive ? "border-primary ring-2 ring-primary/30" : "border-border"
+                )}
               >
-                {cv}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-auto rounded-lg border border-border bg-surface p-3">
-            <Muted className="text-xs">
-              Tip: Upload an existing CV in PDF and I will extract your
-              experience automatically.
-            </Muted>
-          </div>
-        </aside>
-
-        <section className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b border-border px-5 py-4 md:px-7">
-            <div className="flex items-center justify-between gap-4">
-              <H1 className="text-2xl">Interactive CV Chat</H1>
-              <Button>Start New Chat</Button>
-            </div>
-          </header>
-
-          <div className="flex min-h-0 flex-1 flex-col px-5 py-4 md:px-7 md:py-6">
-            <div
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={(event) => {
-                event.preventDefault();
-                setDragActive(false);
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragActive(false);
-                addFiles(event.dataTransfer.files);
-              }}
-              className={cn(
-                "mb-5 rounded-2xl border bg-linear-to-r p-6 md:p-8",
-                dragActive
-                  ? "border-primary from-brand-600 to-sky-300 text-primary-foreground"
-                  : "border-border from-brand-200 via-brand-100 to-sky-100"
-              )}
-            >
-              <p className="text-2xl font-semibold tracking-tight">
-                Welcome back, Jane
-              </p>
-              <p className="mt-2 text-sm opacity-85">
-                Drop PDF files here or use the upload button below to import
-                your existing resume.
-              </p>
-            </div>
-
-            <div className="mb-4 space-y-3 overflow-y-auto pr-1">
-              {sampleMessages.map((message, idx) => (
-                <div
-                  key={`${message.role}-${idx}`}
-                  className={cn(
-                    "max-w-[88%] rounded-2xl border px-4 py-3 text-sm leading-6",
-                    message.role === "assistant"
-                      ? "border-border bg-surface-elevated text-foreground"
-                      : "ml-auto border-primary/30 bg-secondary text-secondary-foreground"
+                <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+                  {canAcceptPdf ? (
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm transition-colors hover:bg-muted">
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="application/pdf"
+                        disabled={isUploading || !canAcceptPdf}
+                        onChange={(event) => addFiles(event.target.files)}
+                      />
+                      <span className="text-base leading-none">+</span>
+                      <span>{t("home.uploadPdfButton")}</span>
+                    </label>
+                  ) : null}
+                  <p className="truncate text-sm text-muted-foreground">{uploadedLabel}</p>
+                  {canAcceptPdf && dragActive && (
+                    <span className="ml-auto text-xs font-medium text-primary">
+                      {t("home.dropFileHint")}
+                    </span>
                   )}
-                >
-                  {message.content}
                 </div>
-              ))}
-            </div>
 
-            <div className="mt-auto space-y-3 rounded-xl border border-border bg-surface-elevated p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-muted-foreground">{uploadedLabel}</p>
-                <label className="inline-flex cursor-pointer items-center">
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="application/pdf"
-                    multiple
-                    onChange={(event) => addFiles(event.target.files)}
-                  />
-                  <span className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground hover:bg-muted">
-                    Upload PDF
-                  </span>
-                </label>
+                {!hasPdf ? (
+                  <div ref={composerRef} className="flex items-center gap-2 p-3">
+                    <input
+                      type="text"
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      placeholder={t("home.promptPlaceholder")}
+                      className="h-12 w-full rounded-full border border-transparent bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      className="h-11 w-11 shrink-0 rounded-full transition-transform duration-200 hover:scale-[1.03]"
+                      onClick={handleSendMessage}
+                    >
+                      {t("home.sendButton")}
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    ref={composerRef}
+                    className="flex flex-col gap-4 p-4 animate-pop-in sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-200">
+                        PDF
+                      </div>
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {selectedPdf.name}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      className="h-10 rounded-full px-5 transition-transform duration-200 hover:scale-[1.02]"
+                      disabled={isUploading}
+                      onClick={handleUploadCv}
+                    >
+                      {isUploading ? (
+                        <>
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                          {t("home.uploading")}
+                        </>
+                      ) : (
+                        t("home.uploadCv")
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
-              <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-                <Textarea
-                  placeholder="Write your message... Example: create a CV focused on Product Design and leadership."
-                  className="min-h-24 bg-surface"
-                />
-                <div className="flex items-end">
-                  <Button className="w-full md:w-auto">Send</Button>
+
+              {canAcceptPdf ? (
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  {t("home.dragAndDropHint")}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="relative flex min-h-0 flex-1 flex-col px-5 py-4 md:px-7 md:py-6">
+              <div
+                ref={messageListRef}
+                className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
+              >
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={cn(
+                      "max-w-[88%] rounded-2xl border px-4 py-3 text-sm leading-6 animate-fade-in-up",
+                      message.role === "assistant"
+                        ? "border-border bg-surface-elevated text-foreground"
+                        : "ml-auto border-primary/30 bg-secondary text-secondary-foreground"
+                    )}
+                  >
+                    {message.content}
+                  </div>
+                ))}
+                {isAssistantTyping ? (
+                  <div className="max-w-[88%] rounded-2xl border border-border bg-surface-elevated px-4 py-3 text-sm text-muted-foreground animate-fade-in-up">
+                    <span className="animate-pulse-soft">{t("home.assistantThinking")}</span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-border bg-surface/85 p-3 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    placeholder={t("home.promptPlaceholder")}
+                    className="h-12 w-full rounded-full border border-transparent bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-full transition-transform duration-200 hover:scale-[1.03]"
+                    onClick={handleSendMessage}
+                  >
+                    {t("home.sendButton")}
+                  </Button>
                 </div>
               </div>
-              <Input
-                type="text"
-                placeholder="Optional: paste a job description URL..."
-                className="bg-surface"
-              />
             </div>
-          </div>
+          )}
         </section>
       </main>
     </div>
