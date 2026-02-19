@@ -30,6 +30,7 @@ export default defineSchema({
       phone: v.string(),
       address: v.optional(v.string()),
     }),
+    additionalInfo: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -17,6 +17,7 @@ export type CvForSemanticContext = {
   skills: string[];
   social?: CvSocial;
   contact: CvContact;
+  additionalInfo?: string;
 };
 
 type ContextChunk = {
@@ -106,6 +107,13 @@ function toChunks(cv: CvForSemanticContext): ContextChunk[] {
       .filter(Boolean)
       .join(", "),
   });
+
+  if (cv.additionalInfo?.trim()) {
+    chunks.push({
+      label: "Additional Info",
+      content: cv.additionalInfo.trim(),
+    });
+  }
 
   return chunks;
 }

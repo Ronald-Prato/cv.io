@@ -55,6 +55,7 @@ CV {
     phone string
     address string ?
   }
+  additionalInfo string ? // plain text for non-modeled fields (e.g. "secondaryEmail: abc@gmail.com")
 }
 ```
 
@@ -80,6 +81,8 @@ This project exposes a dedicated query to fetch one CV by ID:
 
 - `cvs:getById`
 - args: `{ "cvId": "<your_convex_cv_id>" }`
+- `cvs:getUpdatePrompt`
+- args: `{ "cvId": "<your_convex_cv_id>", "locale": "es", "sectionHint": "experience" }`
 
 Start the Convex MCP server:
 

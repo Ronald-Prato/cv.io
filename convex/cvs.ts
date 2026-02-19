@@ -33,6 +33,24 @@ const contactPatchValidator = v.optional(
   }),
 );
 
+function normalizeAdditionalInfoText(value?: string): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return undefined;
+  return lines.join("\n");
+}
+
+function parseAdditionalInfoLines(value?: string): string[] {
+  if (typeof value !== "string") return [];
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 export const create = mutation({
   args: {
     userId: v.optional(v.id("users")),
@@ -42,6 +60,7 @@ export const create = mutation({
     skills: v.array(v.string()),
     social: socialValidator,
     contact: contactValidator,
+    additionalInfo: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -60,6 +79,7 @@ export const create = mutation({
       skills: args.skills,
       social: args.social,
       contact: args.contact,
+      additionalInfo: normalizeAdditionalInfoText(args.additionalInfo),
       createdAt: now,
       updatedAt: now,
     });
@@ -74,6 +94,7 @@ export const createFromParsed = internalMutation({
     skills: v.array(v.string()),
     social: socialValidator,
     contact: contactValidator,
+    additionalInfo: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -84,6 +105,7 @@ export const createFromParsed = internalMutation({
       skills: args.skills,
       social: args.social,
       contact: args.contact,
+      additionalInfo: normalizeAdditionalInfoText(args.additionalInfo),
       createdAt: now,
       updatedAt: now,
     });
@@ -136,6 +158,9 @@ export const updateById = mutation({
     experiencesToRemove: v.optional(v.array(v.string())),
     skillsToAdd: v.optional(v.array(v.string())),
     skillsToRemove: v.optional(v.array(v.string())),
+    additionalInfoToAdd: v.optional(v.array(v.string())),
+    additionalInfoToRemove: v.optional(v.array(v.string())),
+    additionalInfo: v.optional(v.string()),
     social: socialPatchValidator,
     contact: contactPatchValidator,
   },
@@ -208,6 +233,37 @@ export const updateById = mutation({
       };
     })();
 
+    const nextAdditionalInfo = (() => {
+      const isReplaceRequested = args.additionalInfo !== undefined;
+      const hasPatch =
+        Boolean(args.additionalInfoToAdd?.length) ||
+        Boolean(args.additionalInfoToRemove?.length);
+      if (!isReplaceRequested && !hasPatch) {
+        return existing.additionalInfo;
+      }
+
+      let lines = isReplaceRequested
+        ? parseAdditionalInfoLines(args.additionalInfo)
+        : parseAdditionalInfoLines(existing.additionalInfo);
+
+      if (args.additionalInfoToRemove?.length) {
+        const removeSet = new Set(
+          args.additionalInfoToRemove.map((line) => line.trim()).filter(Boolean),
+        );
+        lines = lines.filter((line) => !removeSet.has(line));
+      }
+
+      if (args.additionalInfoToAdd?.length) {
+        for (const line of args.additionalInfoToAdd) {
+          const normalized = line.trim();
+          if (!normalized || lines.includes(normalized)) continue;
+          lines.push(normalized);
+        }
+      }
+
+      return lines.length ? lines.join("\n") : undefined;
+    })();
+
     await ctx.db.patch(args.cvId, {
       labels: applyListPatch(existing.labels, args.labelsToAdd, args.labelsToRemove),
       experiences: applyListPatch(
@@ -216,6 +272,7 @@ export const updateById = mutation({
         args.experiencesToRemove
       ),
       skills: applyListPatch(existing.skills, args.skillsToAdd, args.skillsToRemove),
+      additionalInfo: nextAdditionalInfo,
       social: nextSocial,
       contact: nextContact,
       updatedAt: Date.now(),
@@ -227,5 +284,70 @@ export const updateById = mutation({
     }
 
     return updated;
+  },
+});
+
+export const getUpdatePrompt = query({
+  args: {
+    cvId: v.id("cvs"),
+    locale: v.optional(v.union(v.literal("es"), v.literal("en"))),
+    sectionHint: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const cv = await ctx.db.get(args.cvId);
+    if (!cv) {
+      throw new Error("CV not found");
+    }
+
+    const locale = args.locale === "es" ? "es" : "en";
+    const section = args.sectionHint?.trim();
+
+    if (locale === "es") {
+      return {
+        message:
+          "Antes de guardar cambios en la CV, confirma detalles y pide contexto adicional para enriquecer la información.",
+        sectionHint: section ?? null,
+        followUpQuestions: [
+          section
+            ? `¿Quieres incluir algo más con respecto a ${section}?`
+            : "¿Quieres incluir algo más con respecto a esta skill / experiencia?",
+          section
+            ? `¿Te gustaría subir algún material para más contexto de ${section}?`
+            : "¿Te gustaría subir algún material para más contexto de esta skill / experiencia?",
+          "¿Hay algún dato que no encaje en el modelo actual? Si sí, lo guardo en additionalInfo en formato clave: valor.",
+        ],
+        additionalInfoRule:
+          "Si el usuario comparte campos fuera del modelo (por ejemplo secondaryEmail), guárdalos en additionalInfo como texto plano, por ejemplo: secondaryEmail: abc@gmail.com",
+        cvSummary: {
+          labelsCount: cv.labels.length,
+          experiencesCount: cv.experiences.length,
+          skillsCount: cv.skills.length,
+          hasAdditionalInfo: Boolean(cv.additionalInfo),
+        },
+      };
+    }
+
+    return {
+      message:
+        "Before saving CV updates, confirm details and ask for extra context to enrich the information.",
+      sectionHint: section ?? null,
+      followUpQuestions: [
+        section
+          ? `Do you want to include anything else about ${section}?`
+          : "Do you want to include anything else about this skill / experience?",
+        section
+          ? `Would you like to upload any material for more context about ${section}?`
+          : "Would you like to upload any material for more context about this skill / experience?",
+        "Is there any data that does not fit the current schema? If so, I can store it in additionalInfo using key: value plain text.",
+      ],
+      additionalInfoRule:
+        "If the user shares fields outside the schema (for example secondaryEmail), store them in additionalInfo as plain text, e.g. secondaryEmail: abc@gmail.com",
+      cvSummary: {
+        labelsCount: cv.labels.length,
+        experiencesCount: cv.experiences.length,
+        skillsCount: cv.skills.length,
+        hasAdditionalInfo: Boolean(cv.additionalInfo),
+      },
+    };
   },
 });

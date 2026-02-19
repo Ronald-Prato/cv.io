@@ -24,6 +24,175 @@ type ChatPanelProps = {
   cvId?: string;
 };
 
+type PanelView = "chat" | "templates";
+
+type TemplateKind = "classic" | "styled";
+
+type TemplatePreviewVariant =
+  | "single-column"
+  | "two-column"
+  | "compact"
+  | "editorial"
+  | "gradient"
+  | "timeline";
+
+type CvTemplate = {
+  id: string;
+  name: string;
+  kind: TemplateKind;
+  variant: TemplatePreviewVariant;
+};
+
+const CV_TEMPLATES: CvTemplate[] = [
+  { id: "classic-clean", name: "Classic Clean", kind: "classic", variant: "single-column" },
+  { id: "classic-pro", name: "Classic Pro", kind: "classic", variant: "two-column" },
+  { id: "classic-compact", name: "Classic Compact", kind: "classic", variant: "compact" },
+  { id: "editorial", name: "Editorial", kind: "styled", variant: "editorial" },
+  { id: "aurora", name: "Aurora", kind: "styled", variant: "gradient" },
+  { id: "timeline", name: "Timeline", kind: "styled", variant: "timeline" },
+];
+
+function TemplatePreview({ variant }: { variant: TemplatePreviewVariant }) {
+  if (variant === "two-column") {
+    return (
+      <div className="mx-auto aspect-[3/4] w-full max-w-[176px] rounded-xl border border-border bg-surface p-2">
+        <div className="grid h-full grid-cols-[0.34fr_0.66fr] gap-2">
+          <div className="rounded-md bg-muted p-1.5">
+            <div className="mb-1.5 h-2.5 w-8 rounded bg-muted-foreground/35" />
+            <div className="space-y-1">
+              <div className="h-1.5 rounded bg-muted-foreground/25" />
+              <div className="h-1.5 w-5/6 rounded bg-muted-foreground/25" />
+              <div className="h-1.5 w-2/3 rounded bg-muted-foreground/25" />
+            </div>
+          </div>
+          <div className="space-y-1.5 rounded-md border border-border/80 p-1.5">
+            <div className="h-2.5 w-2/5 rounded bg-foreground/20" />
+            <div className="h-1.5 rounded bg-foreground/12" />
+            <div className="h-1.5 w-11/12 rounded bg-foreground/12" />
+            <div className="h-1.5 w-5/6 rounded bg-foreground/12" />
+            <div className="mt-2 h-2 w-1/3 rounded bg-foreground/18" />
+            <div className="h-1.5 rounded bg-foreground/12" />
+            <div className="h-1.5 w-4/5 rounded bg-foreground/12" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <div className="mx-auto aspect-[3/4] w-full max-w-[176px] rounded-xl border border-border bg-surface p-2">
+        <div className="space-y-1.5 rounded-md border border-border/80 p-2">
+          <div className="h-2.5 w-2/5 rounded bg-foreground/20" />
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="h-1.5 rounded bg-foreground/12" />
+            <div className="h-1.5 rounded bg-foreground/12" />
+          </div>
+          <div className="h-1.5 rounded bg-foreground/12" />
+          <div className="h-1.5 w-5/6 rounded bg-foreground/12" />
+          <div className="grid grid-cols-3 gap-1.5 pt-1">
+            <div className="h-1.5 rounded bg-muted-foreground/28" />
+            <div className="h-1.5 rounded bg-muted-foreground/28" />
+            <div className="h-1.5 rounded bg-muted-foreground/28" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "editorial") {
+    return (
+      <div className="mx-auto aspect-[3/4] w-full max-w-[176px] rounded-xl border border-border bg-surface p-2">
+        <div className="h-full rounded-md border border-border/70 p-2">
+          <div className="mb-1.5 h-2.5 w-1/2 rounded bg-foreground/20" />
+          <div className="mb-2 h-px w-full bg-border" />
+          <div className="grid h-[calc(100%-20px)] grid-cols-[0.62fr_0.38fr] gap-2">
+            <div className="space-y-1">
+              <div className="h-1.5 rounded bg-foreground/12" />
+              <div className="h-1.5 rounded bg-foreground/12" />
+              <div className="h-1.5 w-5/6 rounded bg-foreground/12" />
+              <div className="pt-1">
+                <div className="h-1.5 rounded bg-foreground/12" />
+              </div>
+            </div>
+            <div className="rounded bg-muted p-1">
+              <div className="h-1.5 rounded bg-muted-foreground/28" />
+              <div className="mt-1 h-1.5 w-5/6 rounded bg-muted-foreground/28" />
+              <div className="mt-2 h-1.5 w-2/3 rounded bg-muted-foreground/28" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "gradient") {
+    return (
+      <div className="mx-auto aspect-[3/4] w-full max-w-[176px] rounded-xl border border-border bg-surface p-2">
+        <div className="h-full rounded-md border border-border/70 bg-[linear-gradient(145deg,rgba(123,82,255,0.18),rgba(43,131,222,0.14)_45%,transparent_75%)] p-2 dark:bg-[linear-gradient(145deg,rgba(143,116,255,0.28),rgba(59,145,240,0.2)_45%,transparent_75%)]">
+          <div className="mb-1.5 h-2.5 w-2/5 rounded bg-foreground/22" />
+          <div className="space-y-1">
+            <div className="h-1.5 rounded bg-foreground/14" />
+            <div className="h-1.5 w-11/12 rounded bg-foreground/14" />
+            <div className="h-1.5 w-4/5 rounded bg-foreground/14" />
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            <div className="h-4 rounded bg-surface/70" />
+            <div className="h-4 rounded bg-surface/70" />
+            <div className="h-4 rounded bg-surface/70" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "timeline") {
+    return (
+      <div className="mx-auto aspect-[3/4] w-full max-w-[176px] rounded-xl border border-border bg-surface p-2">
+        <div className="grid h-full grid-cols-[10px_1fr] gap-2 rounded-md border border-border/70 p-2">
+          <div className="relative">
+            <div className="absolute left-1/2 top-1 h-[calc(100%-8px)] w-px -translate-x-1/2 bg-border" />
+            <div className="mt-1 h-1.5 w-1.5 rounded-full bg-foreground/35" />
+            <div className="mt-4 h-1.5 w-1.5 rounded-full bg-foreground/35" />
+            <div className="mt-4 h-1.5 w-1.5 rounded-full bg-foreground/35" />
+          </div>
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <div className="h-1.5 w-1/2 rounded bg-foreground/16" />
+              <div className="h-1.5 rounded bg-foreground/12" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-1.5 w-2/5 rounded bg-foreground/16" />
+              <div className="h-1.5 w-11/12 rounded bg-foreground/12" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-1.5 w-1/3 rounded bg-foreground/16" />
+              <div className="h-1.5 w-3/4 rounded bg-foreground/12" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto aspect-[3/4] w-full max-w-[176px] rounded-xl border border-border bg-surface p-2">
+      <div className="h-full rounded-md border border-border/80 p-2">
+        <div className="mb-1.5 h-2.5 w-2/5 rounded bg-foreground/20" />
+        <div className="space-y-1">
+          <div className="h-1.5 rounded bg-foreground/12" />
+          <div className="h-1.5 rounded bg-foreground/12" />
+          <div className="h-1.5 w-10/12 rounded bg-foreground/12" />
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <div className="h-5 rounded bg-muted" />
+          <div className="h-5 rounded bg-muted" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function normalizeAssistantMarkdown(content: string): string {
   const fencedBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
   const unwrapped = content.replace(fencedBlockRegex, (full, langRaw, innerRaw) => {
@@ -186,10 +355,15 @@ async function parseApiError(response: Response): Promise<string | null> {
 export function ChatPanel({ cvId }: ChatPanelProps) {
   const BOTTOM_SCROLL_THRESHOLD = 80;
   const { t, i18n } = useTranslation();
+  const [activeView, setActiveView] = useState<PanelView>("chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [messageListRef] = useAutoAnimate<HTMLDivElement>({
+    duration: 260,
+    easing: "ease-out",
+  });
+  const [templateListRef] = useAutoAnimate<HTMLDivElement>({
     duration: 260,
     easing: "ease-out",
   });
@@ -240,9 +414,10 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
   }, [cvId, locale, t]);
 
   useEffect(() => {
+    if (activeView !== "chat") return;
     if (!shouldAutoScrollRef.current) return;
     scrollToBottom("smooth");
-  }, [messages, isStreaming]);
+  }, [messages, isStreaming, activeView]);
 
   useEffect(() => {
     return () => {
@@ -375,11 +550,12 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                variant="outline"
+                variant={activeView === "chat" ? "secondary" : "outline"}
                 size="icon"
                 aria-label={t("home.viewChat")}
                 title={t("home.viewChat")}
-                aria-pressed
+                aria-pressed={activeView === "chat"}
+                onClick={() => setActiveView("chat")}
                 className="h-9 w-9 rounded-lg"
               >
                 <MessageSquareText className="h-4 w-4" />
@@ -392,11 +568,12 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                variant="outline"
+                variant={activeView === "templates" ? "secondary" : "outline"}
                 size="icon"
                 aria-label={t("home.viewTemplates")}
                 title={t("home.viewTemplates")}
-                aria-pressed={false}
+                aria-pressed={activeView === "templates"}
+                onClick={() => setActiveView("templates")}
                 className="h-9 w-9 rounded-lg"
               >
                 <LayoutTemplate className="h-4 w-4" />
@@ -408,86 +585,132 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
       </TooltipProvider>
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[850px] flex-1 flex-col px-4 pb-4 pt-16 md:pb-6 md:pt-20">
-        <div
-          ref={setMessageContainerRef}
-          onScroll={() => {
-            const element = scrollContainerRef.current;
-            if (!element) return;
-            shouldAutoScrollRef.current = isNearBottom(element);
-          }}
-          className="chat-scroll min-h-0 flex-1 space-y-5 overflow-y-auto pr-3 md:pr-4"
-        >
-          {messages.map((message) =>
-            message.role === "user" ? (
-              <div key={message.id} className="flex justify-end">
-                <div
-                  className={cn(
-                    "w-fit max-w-[80%] break-words rounded-3xl rounded-tr-lg bg-muted px-5 py-3 text-[15px] leading-8 text-foreground animate-fade-in-up",
-                    "dark:bg-[#2a2d33]"
-                  )}
-                >
-                  {message.content}
-                </div>
-              </div>
-            ) : (
-              <div key={message.id} className="w-full animate-fade-in-up">
-                <div className="markdown-body text-[17px] leading-9 text-foreground">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {normalizeAssistantMarkdown(message.content)}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )
-          )}
-
-          {isStreaming ? (
-            <div className="flex items-center gap-2 pl-1 text-muted-foreground animate-fade-in-up">
-              <span className="typing-dot-md" />
-              <span className="typing-dot-md" style={{ animationDelay: "180ms" }} />
-              <span className="typing-dot-md" style={{ animationDelay: "360ms" }} />
-            </div>
-          ) : null}
-
-          <div ref={listEndRef} />
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-border bg-surface/85 p-3 shadow-sm backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              autoFocus
-              type="text"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleSendMessage();
-                }
+        {activeView === "chat" ? (
+          <>
+            <div
+              ref={setMessageContainerRef}
+              onScroll={() => {
+                const element = scrollContainerRef.current;
+                if (!element) return;
+                shouldAutoScrollRef.current = isNearBottom(element);
               }}
-              placeholder={t("home.promptPlaceholder")}
-              disabled={!canWrite}
-              className="h-12 w-full rounded-full border border-transparent bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-70"
-            />
-            <Button
-              type="button"
-              size="icon"
-              className="h-11 w-11 shrink-0 rounded-full transition-transform duration-200 hover:scale-[1.03]"
-              onClick={() => void handleSendMessage()}
-              disabled={!canWrite || isStreaming || !prompt.trim()}
-              aria-label={t("home.sendButton")}
-              title={t("home.sendButton")}
+              className="chat-scroll min-h-0 flex-1 space-y-5 overflow-y-auto pr-3 md:pr-4"
             >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+              {messages.map((message) =>
+                message.role === "user" ? (
+                  <div key={message.id} className="flex justify-end">
+                    <div
+                      className={cn(
+                        "w-fit max-w-[80%] break-words rounded-3xl rounded-tr-lg bg-muted px-5 py-3 text-[15px] leading-8 text-foreground animate-fade-in-up",
+                        "dark:bg-[#2a2d33]"
+                      )}
+                    >
+                      {message.content}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={message.id} className="w-full animate-fade-in-up">
+                    <div className="markdown-body text-[17px] leading-9 text-foreground">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {normalizeAssistantMarkdown(message.content)}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )
+              )}
 
-          {!canWrite ? (
-            <p className="px-4 pt-2 text-xs text-muted-foreground">
-              {t("home.writeOnlyOnCvRoute")}
-            </p>
-          ) : null}
-        </div>
+              {isStreaming ? (
+                <div className="flex items-center gap-2 pl-1 text-muted-foreground animate-fade-in-up">
+                  <span className="typing-dot-md" />
+                  <span className="typing-dot-md" style={{ animationDelay: "180ms" }} />
+                  <span className="typing-dot-md" style={{ animationDelay: "360ms" }} />
+                </div>
+              ) : null}
+
+              <div ref={listEndRef} />
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-border bg-surface/85 p-3 shadow-sm backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  autoFocus
+                  type="text"
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleSendMessage();
+                    }
+                  }}
+                  placeholder={t("home.promptPlaceholder")}
+                  disabled={!canWrite}
+                  className="h-12 w-full rounded-full border border-transparent bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-full transition-transform duration-200 hover:scale-[1.03]"
+                  onClick={() => void handleSendMessage()}
+                  disabled={!canWrite || isStreaming || !prompt.trim()}
+                  aria-label={t("home.sendButton")}
+                  title={t("home.sendButton")}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {!canWrite ? (
+                <p className="px-4 pt-2 text-xs text-muted-foreground">
+                  {t("home.writeOnlyOnCvRoute")}
+                </p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <div className="min-h-0 flex-1">
+            <div className="mb-4 animate-fade-in-up">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                {t("home.templatesTitle", { defaultValue: "CV Templates" })}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("home.templatesSubtitle", {
+                  defaultValue:
+                    "Preview classic and styled resume layouts. Selection actions are coming soon.",
+                })}
+              </p>
+            </div>
+
+            <div
+              ref={templateListRef}
+              className="chat-scroll grid max-h-full min-h-0 grid-cols-1 gap-4 overflow-y-auto pr-3 pb-2 md:grid-cols-2 md:pr-4 lg:grid-cols-3"
+            >
+              {CV_TEMPLATES.map((template, index) => (
+                <article
+                  key={template.id}
+                  className="animate-fade-in-up rounded-2xl border border-border bg-surface/90 p-3 shadow-sm backdrop-blur-sm"
+                  style={{ animationDelay: `${index * 45}ms` }}
+                >
+                  <TemplatePreview variant={template.variant} />
+                  <div className="mt-3 flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">{template.name}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {template.kind === "classic"
+                          ? t("home.templateKindClassic")
+                          : t("home.templateKindStyled")}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                      {t("home.templatesComingSoon", { defaultValue: "Soon" })}
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

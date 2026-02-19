@@ -45,6 +45,9 @@ type UpdateCvToolArgs = {
   experiencesToRemove?: string[];
   skillsToAdd?: string[];
   skillsToRemove?: string[];
+  additionalInfoToAdd?: string[];
+  additionalInfoToRemove?: string[];
+  additionalInfo?: string;
   social?: {
     linkedin?: string | null;
     facebook?: string | null;
@@ -56,6 +59,12 @@ type UpdateCvToolArgs = {
     phone?: string;
     address?: string | null;
   };
+};
+
+type GetCvUpdatePromptToolArgs = {
+  cvId: string;
+  locale?: "es" | "en";
+  sectionHint?: string;
 };
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -110,9 +119,12 @@ function buildSystemPrompt(locale: AppLanguage): string {
     "Do not use HTML tags like <br>; use plain Markdown line breaks and paragraphs.",
     "For JSON snippets, use fenced blocks with language identifier json.",
     "To access CV data, use the tool get_cv_by_id.",
+    "Before any CV update, call get_cv_update_prompt to gather follow-up questions and enrichment guidance.",
     "To modify CV data, use the tool update_cv_by_id.",
     "Call get_cv_by_id only when the user asks for CV-specific data or analysis that requires reading the CV.",
-    "Call update_cv_by_id when the user asks to add, remove, or edit CV fields (experiences, skills, labels, contact, social).",
+    "Call update_cv_by_id when the user asks to add, remove, or edit CV fields (experiences, skills, labels, contact, social, additionalInfo).",
+    "When information is incomplete or could be enriched, ask follow-up questions first and wait for the user response before calling update_cv_by_id.",
+    "Use additionalInfo for fields that do not fit the schema (for example: secondaryEmail: abc@gmail.com).",
     "Never modify createdAt. updatedAt must be managed by backend automatically.",
     "Do not call tools for greetings, small talk, or generic writing advice.",
     "Do not assume CV data from hidden context and do not invent CV fields.",
@@ -377,7 +389,13 @@ function parseUpdateCvToolArgs(
     experiencesToRemove: asStringArray(parsed.experiencesToRemove),
     skillsToAdd: asStringArray(parsed.skillsToAdd),
     skillsToRemove: asStringArray(parsed.skillsToRemove),
+    additionalInfoToAdd: asStringArray(parsed.additionalInfoToAdd),
+    additionalInfoToRemove: asStringArray(parsed.additionalInfoToRemove),
   };
+
+  if (typeof parsed.additionalInfo === "string") {
+    result.additionalInfo = parsed.additionalInfo;
+  }
 
   if (social) {
     const socialPatch: NonNullable<UpdateCvToolArgs["social"]> = {};
@@ -399,6 +417,25 @@ function parseUpdateCvToolArgs(
   }
 
   return result;
+}
+
+function parseGetCvUpdatePromptToolArgs(
+  rawArgs: string,
+  fallbackCvId: string,
+  fallbackLocale: AppLanguage
+): GetCvUpdatePromptToolArgs {
+  const parsed = parseJsonObject(rawArgs);
+  const locale = parsed.locale === "es" || parsed.locale === "en" ? parsed.locale : fallbackLocale;
+  const sectionHint =
+    typeof parsed.sectionHint === "string" && parsed.sectionHint.trim().length > 0
+      ? parsed.sectionHint.trim()
+      : undefined;
+
+  return {
+    cvId: parseToolCvId(rawArgs, fallbackCvId),
+    locale,
+    sectionHint,
+  };
 }
 
 function isCvNotFoundError(error: unknown): boolean {
@@ -479,7 +516,7 @@ export async function POST(request: NextRequest) {
         function: {
           name: "update_cv_by_id",
           description:
-            "Update CV fields. Supports add/remove operations for arrays and partial updates for contact/social. createdAt must never be modified.",
+            "Update CV fields. Supports add/remove operations for arrays and partial updates for contact/social/additionalInfo. createdAt must never be modified.",
           parameters: {
             type: "object",
             additionalProperties: false,
@@ -512,6 +549,23 @@ export async function POST(request: NextRequest) {
                 type: "array",
                 items: { type: "string" },
               },
+              additionalInfoToAdd: {
+                type: "array",
+                items: { type: "string" },
+                description:
+                  "Plain text entries for extra data outside schema, e.g. secondaryEmail: abc@gmail.com",
+              },
+              additionalInfoToRemove: {
+                type: "array",
+                items: { type: "string" },
+                description:
+                  "Remove exact plain text entries previously stored in additionalInfo.",
+              },
+              additionalInfo: {
+                type: "string",
+                description:
+                  "Optional full replacement for additionalInfo plain text (can include multiple lines).",
+              },
               social: {
                 type: "object",
                 additionalProperties: false,
@@ -530,6 +584,34 @@ export async function POST(request: NextRequest) {
                   phone: { type: "string" },
                   address: { type: ["string", "null"] },
                 },
+              },
+            },
+            required: ["cvId"],
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "get_cv_update_prompt",
+          description:
+            "Return follow-up questions and guidance to enrich data before updating a CV.",
+          parameters: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              cvId: {
+                type: "string",
+                description: "Convex id of the cv document.",
+              },
+              locale: {
+                type: "string",
+                enum: ["es", "en"],
+                description: "Language for follow-up questions.",
+              },
+              sectionHint: {
+                type: "string",
+                description: "Optional section/topic being updated (skill, experience, contact, etc).",
               },
             },
             required: ["cvId"],
@@ -571,7 +653,8 @@ export async function POST(request: NextRequest) {
     const toolCall = message?.tool_calls?.find(
       (call) =>
         call.function?.name === "get_cv_by_id" ||
-        call.function?.name === "update_cv_by_id"
+        call.function?.name === "update_cv_by_id" ||
+        call.function?.name === "get_cv_update_prompt"
     );
 
     if (!toolCall) {
@@ -605,8 +688,30 @@ export async function POST(request: NextRequest) {
           experiencesToRemove: updateArgs.experiencesToRemove,
           skillsToAdd: updateArgs.skillsToAdd,
           skillsToRemove: updateArgs.skillsToRemove,
+          additionalInfoToAdd: updateArgs.additionalInfoToAdd,
+          additionalInfoToRemove: updateArgs.additionalInfoToRemove,
+          additionalInfo: updateArgs.additionalInfo,
           social: updateArgs.social,
           contact: updateArgs.contact,
+        });
+      } catch (error) {
+        if (isCvNotFoundError(error)) {
+          return jsonError(404, dict.chatCvNotFound);
+        }
+        return jsonError(500, dict.chatFailedUnexpected);
+      }
+    } else if (toolCall.function.name === "get_cv_update_prompt") {
+      const promptArgs = parseGetCvUpdatePromptToolArgs(
+        toolCall.function.arguments,
+        body.cvId,
+        locale
+      );
+      toolArgsForOpenAI = promptArgs;
+      try {
+        toolResult = await convex.query(api.cvs.getUpdatePrompt, {
+          cvId: promptArgs.cvId as Id<"cvs">,
+          locale: promptArgs.locale,
+          sectionHint: promptArgs.sectionHint,
         });
       } catch (error) {
         if (isCvNotFoundError(error)) {
