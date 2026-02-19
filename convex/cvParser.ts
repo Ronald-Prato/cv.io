@@ -18,6 +18,7 @@ type ParsedCvPayload = {
     phone: string;
     address?: string;
   };
+  additionalInfo?: string;
 };
 
 function normalizeStringArray(value: unknown): string[] {
@@ -74,6 +75,7 @@ function normalizeParsedCv(raw: unknown, fileName: string): ParsedCvPayload {
       phone: normalizeOptionalString(contactInput?.phone) ?? "",
       address: normalizeOptionalString(contactInput?.address),
     },
+    additionalInfo: normalizeOptionalString(data.additionalInfo),
   };
 }
 
@@ -127,7 +129,8 @@ async function parsePdfWithChatCompletions(args: {
             "Extract CV data from PDF and return valid JSON only. " +
             "JSON keys: labels (string[]), experiences (string[]), skills (string[]), " +
             "social (object with optional linkedin, facebook, youtube, github), " +
-            "contact (object with email, phone, optional address). " +
+            "contact (object with email, phone, optional address), " +
+            "additionalInfo (optional string for data that does not fit other fields). " +
             "No markdown, no explanations, no extra keys.",
         },
         {
@@ -249,6 +252,7 @@ export const parseUploadedPdfToCv = action({
         skills: normalized.skills,
         social: normalized.social,
         contact: normalized.contact,
+        additionalInfo: normalized.additionalInfo,
       });
 
       await ctx.runMutation(internal.files.attachCv, {
