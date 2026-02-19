@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# cv.io
+
+`cv.io` is an open source platform to help people create, manage, and iterate on their CV with an AI-powered workflow.
+
+The core idea is simple: instead of editing static resume files manually, users interact with a smart chat agent that can structure experience, improve content, and eventually export polished CVs in multiple templates.
+
+## Product Intent
+
+- Build a CV workspace where users can keep multiple resumes organized.
+- Add an intelligent chat layer to update CV sections with natural language.
+- Support importing existing resumes (PDF) as a starting point.
+- Export final CVs as PDFs with different layouts/templates.
+
+## Current Scope (Macro)
+
+- **Home-first UX** with two main areas:
+  - Left sidebar with user info and "My CVs" list.
+  - Right interactive chat area (ChatGPT-like), including PDF drop/upload and chat input.
+- **Design system foundations**:
+  - Reusable UI primitives inspired by shadcn patterns (`Button`, `Input`, `Textarea`, `Tooltip`, `Skeleton`, `Typography`).
+  - Semantic color tokens available in Tailwind utilities.
+  - Dark mode-ready token system.
+
+## Tech Stack
+
+- **Frontend:** Next.js (App Router) + React + TypeScript
+- **Styling:** Tailwind CSS v4
+- **Backend/BaaS:** Convex
+- **Auth (planned/target):** Clerk
+
+## Domain Contracts (Initial)
+
+```txt
+User {
+  id uid
+  email string
+  authId string
+  createdAt Date
+  updatedAt Date
+}
+
+CV {
+  id uid
+  labels string[]
+  experiences string[]
+  skills string[]
+  social {
+    linkedin string
+    facebook string
+    youtube string
+    github string
+  } ?
+  contact {
+    email string
+    phone string
+    address string ?
+  }
+}
+```
+
+## Current Project Status
+
+- UI baseline implemented for the first screen.
+- Home page structure aligned with product setup spec.
+- Color system and component layer ready to scale into more screens.
+- Convex project scaffold is present for backend iteration.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Near-Term Roadmap
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Connect chat UI with real conversation state and Convex mutations/queries.
+- Persist CV entities and history per user.
+- Add auth with Clerk and user-scoped data access.
+- Implement PDF parsing/import flow.
+- Add CV export pipeline with templates.
