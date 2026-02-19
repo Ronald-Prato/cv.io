@@ -1,26 +1,159 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --background: #f3f4f8;
+  --foreground: #1d2230;
+  --surface: #ffffff;
+  --surface-elevated: #f8f9fc;
+
+  --border: #e6e8ef;
+  --input: #dde2ed;
+  --ring: #7b52ff;
+
+  --muted: #eceff7;
+  --muted-foreground: #6f768a;
+
+  --primary: #6d31ff;
+  --primary-hover: #5e28e0;
+  --primary-foreground: #ffffff;
+
+  --secondary: #e8e7ff;
+  --secondary-foreground: #372d75;
+
+  --accent: #bcdcf6;
+  --accent-foreground: #12263a;
+
+  --brand-50: #f3eeff;
+  --brand-100: #e8ddff;
+  --brand-200: #d3bdff;
+  --brand-300: #b597ff;
+  --brand-400: #9876ff;
+  --brand-500: #7b52ff;
+  --brand-600: #6d31ff;
+  --brand-700: #5e28e0;
+
+  --sky-100: #e4f2ff;
+  --sky-200: #cfe8ff;
+  --sky-300: #b7dcfb;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #0f1220;
+  --foreground: #eef1ff;
+  --surface: #171b2c;
+  --surface-elevated: #1b2237;
+
+  --border: #29324b;
+  --input: #313a55;
+  --ring: #9e84ff;
+
+  --muted: #202841;
+  --muted-foreground: #98a2c1;
+
+  --primary: #8f74ff;
+  --primary-hover: #7e62ee;
+  --primary-foreground: #ffffff;
+
+  --secondary: #2a3150;
+  --secondary-foreground: #d8ddff;
+
+  --accent: #31527a;
+  --accent-foreground: #e7f2ff;
+
+  --brand-50: #1d1f37;
+  --brand-100: #252845;
+  --brand-200: #31355b;
+  --brand-300: #424878;
+  --brand-400: #5e58b3;
+  --brand-500: #7e62ee;
+  --brand-600: #8f74ff;
+  --brand-700: #aa94ff;
+
+  --sky-100: #1d3149;
+  --sky-200: #224162;
+  --sky-300: #2f5680;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-sky-100: var(--sky-100);
+  --color-sky-200: var(--sky-200);
+  --color-sky-300: var(--sky-300);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not(.light):not(.dark) {
+    color-scheme: dark;
+
+    --background: #0f1220;
+    --foreground: #eef1ff;
+    --surface: #171b2c;
+    --surface-elevated: #1b2237;
+
+    --border: #29324b;
+    --input: #313a55;
+    --ring: #9e84ff;
+
+    --muted: #202841;
+    --muted-foreground: #98a2c1;
+
+    --primary: #8f74ff;
+    --primary-hover: #7e62ee;
+    --primary-foreground: #ffffff;
+
+    --secondary: #2a3150;
+    --secondary-foreground: #d8ddff;
+
+    --accent: #31527a;
+    --accent-foreground: #e7f2ff;
+
+    --brand-50: #1d1f37;
+    --brand-100: #252845;
+    --brand-200: #31355b;
+    --brand-300: #424878;
+    --brand-400: #5e58b3;
+    --brand-500: #7e62ee;
+    --brand-600: #8f74ff;
+    --brand-700: #aa94ff;
+
+    --sky-100: #1d3149;
+    --sky-200: #224162;
+    --sky-300: #2f5680;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
