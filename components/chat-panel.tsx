@@ -1089,6 +1089,7 @@ async function parseApiError(response: Response): Promise<string | null> {
 
 export function ChatPanel({ cvId }: ChatPanelProps) {
   const BOTTOM_SCROLL_THRESHOLD = 80;
+  const MAX_PROMPT_ROWS = 5;
   const { t, i18n } = useTranslation();
   const [activeView, setActiveView] = useState<PanelView>("chat");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -1105,7 +1106,7 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
   });
   const listEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const shouldAutoScrollRef = useRef(true);
 
@@ -1141,6 +1142,28 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
     return distanceToBottom <= BOTTOM_SCROLL_THRESHOLD;
   }
 
+  const resizePromptTextarea = useCallback(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const styles = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(styles.lineHeight) || 24;
+    const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
+    const borderTop = Number.parseFloat(styles.borderTopWidth) || 0;
+    const borderBottom = Number.parseFloat(styles.borderBottomWidth) || 0;
+    const maxHeight =
+      lineHeight * MAX_PROMPT_ROWS + paddingTop + paddingBottom + borderTop + borderBottom;
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    if (textarea.scrollHeight <= maxHeight) {
+      textarea.scrollTop = 0;
+    }
+  }, [MAX_PROMPT_ROWS]);
+
   useEffect(() => {
     const initialMessage: ChatMessage = {
       id: `assistant-initial-${cvId ?? "home"}-${locale}`,
@@ -1160,6 +1183,10 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
       inputRef.current?.focus();
     });
   }, [cvId, locale, t]);
+
+  useEffect(() => {
+    resizePromptTextarea();
+  }, [prompt, resizePromptTextarea]);
 
   useEffect(() => {
     setSelectedTemplateId(null);
@@ -1391,34 +1418,37 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
             </div>
 
             <div className="mt-4 rounded-2xl border border-border bg-surface/85 p-3 shadow-sm backdrop-blur-sm">
-              <div className="flex items-center gap-2">
-                <input
+              <div className="flex flex-col gap-2">
+                <textarea
                   ref={inputRef}
                   autoFocus
-                  type="text"
+                  rows={1}
+                  wrap="soft"
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") {
+                    if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
                       void handleSendMessage();
                     }
                   }}
                   placeholder={t("home.promptPlaceholder")}
                   disabled={!canWrite}
-                  className="h-12 w-full rounded-full border border-transparent bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                  className="max-h-none min-h-12 w-full resize-none rounded-3xl border border-transparent bg-transparent px-4 py-3 text-base leading-6 text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-70"
                 />
-                <Button
-                  type="button"
-                  size="icon"
-                  className="h-11 w-11 shrink-0 rounded-full transition-transform duration-200 hover:scale-[1.03]"
-                  onClick={() => void handleSendMessage()}
-                  disabled={!canWrite || isStreaming || !prompt.trim()}
-                  aria-label={t("home.sendButton")}
-                  title={t("home.sendButton")}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-full transition-transform duration-200 hover:scale-[1.03]"
+                    onClick={() => void handleSendMessage()}
+                    disabled={!canWrite || isStreaming || !prompt.trim()}
+                    aria-label={t("home.sendButton")}
+                    title={t("home.sendButton")}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               {!canWrite ? (
