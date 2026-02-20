@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { LayoutTemplate, MessageSquareText, Send } from "lucide-react";
+import { useQuery } from "convex/react";
+import { ChevronLeft, LayoutTemplate, MessageSquareText, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { api } from "@/convex/_generated/api";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -51,6 +54,148 @@ const CV_TEMPLATES: CvTemplate[] = [
   { id: "aurora", name: "Aurora", kind: "styled", variant: "gradient" },
   { id: "timeline", name: "Timeline", kind: "styled", variant: "timeline" },
 ];
+
+type ResumePreviewData = {
+  name: string;
+  role: string;
+  summary: string;
+  contact: {
+    email: string;
+    phone: string;
+    address?: string;
+  };
+  social: Array<{
+    label: string;
+    value: string;
+  }>;
+  labels: string[];
+  skills: string[];
+  experiences: string[];
+  notes: string[];
+};
+
+type AppLocale = "en" | "es";
+
+const DEFAULT_RESUME_DATA: Record<AppLocale, ResumePreviewData> = {
+  en: {
+    name: "Alex Martinez",
+    role: "Senior Product Designer",
+    summary:
+      "Design professional focused on shipping measurable UX improvements across SaaS products.",
+    contact: {
+      email: "alex.martinez@email.com",
+      phone: "+1 (305) 555-0148",
+      address: "Miami, FL",
+    },
+    social: [
+      { label: "LinkedIn", value: "linkedin.com/in/alexmartinez" },
+      { label: "GitHub", value: "github.com/alexmartinez" },
+    ],
+    labels: ["Product Design", "Design Systems", "UX Research", "Accessibility"],
+    skills: [
+      "Figma",
+      "Framer",
+      "Design tokens",
+      "A/B testing",
+      "Information architecture",
+      "Stakeholder management",
+    ],
+    experiences: [
+      "Lead redesign for B2B onboarding flow and improved activation by 19%.",
+      "Built and governed a shared component library used by 4 product squads.",
+      "Defined UX research cadence with PM and data teams for quarterly roadmaps.",
+      "Partnered with engineering to reduce handoff cycle time from 8 days to 3 days.",
+    ],
+    notes: [
+      "Open to remote and hybrid roles.",
+      "Portfolio available on request.",
+    ],
+  },
+  es: {
+    name: "Alex Martinez",
+    role: "Disenador/a Senior de Producto",
+    summary:
+      "Perfil de diseno orientado a lanzar mejoras de UX con impacto medible en productos SaaS.",
+    contact: {
+      email: "alex.martinez@email.com",
+      phone: "+1 (305) 555-0148",
+      address: "Miami, FL",
+    },
+    social: [
+      { label: "LinkedIn", value: "linkedin.com/in/alexmartinez" },
+      { label: "GitHub", value: "github.com/alexmartinez" },
+    ],
+    labels: ["Diseno de producto", "Design systems", "Investigacion UX", "Accesibilidad"],
+    skills: [
+      "Figma",
+      "Framer",
+      "Design tokens",
+      "Pruebas A/B",
+      "Arquitectura de informacion",
+      "Gestion con stakeholders",
+    ],
+    experiences: [
+      "Lidere el rediseno del onboarding B2B y subi la activacion en 19%.",
+      "Cree una libreria de componentes compartida para 4 squads de producto.",
+      "Defini ciclos de investigacion UX junto con PM y equipo de datos.",
+      "Reduje el tiempo de handoff con ingenieria de 8 dias a 3 dias.",
+    ],
+    notes: [
+      "Disponible para remoto e hibrido.",
+      "Portafolio disponible bajo solicitud.",
+    ],
+  },
+};
+
+function splitLines(value?: string): string[] {
+  if (!value) return [];
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function cleanMarkdownLine(line: string): string {
+  return line
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^[-*+]\s+/, "")
+    .replace(/^\d+\.\s+/, "")
+    .replace(/`/g, "")
+    .trim();
+}
+
+function toResumePreviewData(
+  cv: Doc<"cvs"> | null | undefined,
+  locale: AppLocale
+): ResumePreviewData {
+  const base = DEFAULT_RESUME_DATA[locale];
+
+  if (!cv) return base;
+
+  const markdownLines = splitLines(cv.description)
+    .map(cleanMarkdownLine)
+    .filter(Boolean);
+  const summary = markdownLines[0] ?? base.summary;
+  const experiences =
+    markdownLines.slice(1, 5).length > 0
+      ? markdownLines.slice(1, 5)
+      : markdownLines.length > 0
+        ? markdownLines.slice(0, 4)
+        : base.experiences;
+  const notes = markdownLines.slice(5, 10);
+
+  return {
+    name: base.name,
+    role: base.role,
+    summary,
+    contact: base.contact,
+    social: base.social,
+    labels: base.labels,
+    skills: base.skills,
+    experiences,
+    notes: notes.length > 0 ? notes : base.notes,
+  };
+}
 
 function TemplatePreview({ variant }: { variant: TemplatePreviewVariant }) {
   if (variant === "two-column") {
@@ -190,6 +335,596 @@ function TemplatePreview({ variant }: { variant: TemplatePreviewVariant }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function TemplateFullPreview({
+  variant,
+  data,
+}: {
+  variant: TemplatePreviewVariant;
+  data: ResumePreviewData;
+}) {
+  const topLabels = data.labels.slice(0, 6);
+  const topSkills = data.skills.slice(0, 8);
+  const topExperiences = data.experiences.slice(0, 4);
+  const topNotes = data.notes.slice(0, 3);
+
+  if (variant === "two-column") {
+    type ClassicProTimelineItem = {
+      period: string;
+      location: string;
+      company: string;
+      role: string;
+      description: string;
+    };
+
+    const nameParts = data.name.trim().split(/\s+/).filter(Boolean);
+    const firstName = nameParts[0] ?? data.name;
+    const lastName = nameParts.slice(1).join(" ");
+    const aboutParagraphs = [data.summary, ...data.notes].filter(Boolean).slice(0, 2);
+    const timelineSource = data.experiences.length > 0 ? data.experiences : [data.summary];
+    const timelineEntries: ClassicProTimelineItem[] = timelineSource.map((description, index) => {
+      const startYear = 2019 + index;
+      const labelAsCompany = data.labels[index % Math.max(1, data.labels.length)] ?? data.role;
+      return {
+        period: `${startYear} - ${startYear + 1}`,
+        location: data.contact.address ?? "Remote",
+        company: labelAsCompany,
+        role: data.role,
+        description,
+      };
+    });
+
+    const timelineChunks: ClassicProTimelineItem[][] = [];
+    const entriesPerPage = 3;
+    for (let index = 0; index < timelineEntries.length; index += entriesPerPage) {
+      timelineChunks.push(timelineEntries.slice(index, index + entriesPerPage));
+    }
+
+    const firstPageTimeline = timelineChunks[0] ?? [];
+    const continuedTimelineChunks = timelineChunks.slice(1);
+    if (continuedTimelineChunks.length === 0) {
+      continuedTimelineChunks.push([]);
+    }
+
+    const expertiseItems = timelineEntries.slice(0, 5);
+    const skillsForSidebar = data.skills.slice(0, 15);
+    const socialLinks = data.social.slice(0, 3);
+    const highlightItems =
+      data.notes.length > 0
+        ? data.notes.slice(0, 3).map((note, index) => ({
+            title: note,
+            description: data.experiences[index] ?? data.summary,
+          }))
+        : data.labels.slice(0, 3).map((label, index) => ({
+            title: label,
+            description: data.experiences[index] ?? data.summary,
+          }));
+
+    const pageFontStyle = {
+      fontFamily: '"Poppins", "Montserrat", "Segoe UI", sans-serif',
+    };
+
+    const renderTimeline = (items: ClassicProTimelineItem[], keyPrefix: string) => (
+      <div className="relative mt-6">
+        <div className="absolute left-[10px] top-2 h-[calc(100%-8px)] w-[2px] bg-[#6f6f73]" />
+        <div className="space-y-7">
+          {items.map((item, index) => (
+            <article key={`${keyPrefix}-${index}`} className="relative pl-10">
+              <span className="absolute left-[11px] top-2 h-4 w-4 -translate-x-1/2 rounded-full border-[3px] border-[#3a3a3f] bg-[#f3f3f3]" />
+              <p className="text-[14px] font-semibold tracking-[0.015em] text-[#2f2f34]">{item.period}</p>
+              <p className="text-[12px] leading-tight text-[#3f3f43]">{item.location}</p>
+              <p className="mt-1 text-[19px] font-semibold leading-tight text-[#2f2f34]">{item.company}</p>
+              <p className="text-[12px] font-medium text-[#3f3f43]">{item.role}</p>
+              <p className="mt-2 text-[11px] leading-[1.55] text-[#5f5f64]">{item.description}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+
+    const renderSidebarHeading = (label: string) => (
+      <div>
+        <h3 className="text-[16px] font-semibold leading-tight text-[#f2f2f2]">{label}</h3>
+        <div className="mt-2 h-px bg-[#d4d4d4]/90" />
+      </div>
+    );
+
+    return (
+      <div className="mx-auto flex w-fit flex-col gap-6 pb-3">
+        <article
+          className="grid h-[1123px] w-[794px] grid-cols-[272px_1fr] overflow-hidden border border-[#2f2f34] bg-[#f3f3f3] shadow-[0_24px_55px_rgba(0,0,0,0.2)]"
+          style={pageFontStyle}
+        >
+          <aside className="h-full bg-[#2f2f34] px-10 py-12 text-[#f3f3f3]">
+            <div className="mx-auto h-40 w-40 rounded-full bg-[#4a4a4f]" />
+
+            <section className="mt-12">
+              {renderSidebarHeading("Contact")}
+              <div className="mt-6 space-y-5">
+                <div>
+                  <p className="text-[12px] font-semibold leading-none">Phone</p>
+                  <p className="mt-1 text-[11px] leading-tight text-[#ededed]">{data.contact.phone}</p>
+                </div>
+                <div>
+                  <p className="text-[12px] font-semibold leading-none">Email</p>
+                  <p className="mt-1 text-[11px] leading-tight text-[#ededed]">{data.contact.email}</p>
+                </div>
+                <div>
+                  <p className="text-[12px] font-semibold leading-none">Address</p>
+                  <p className="mt-1 text-[11px] leading-tight text-[#ededed]">
+                    {data.contact.address ?? "Remote"}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-12">
+              {renderSidebarHeading("Expertise")}
+              <div className="mt-6 space-y-6">
+                {expertiseItems.map((item) => (
+                  <div key={`${item.period}-${item.company}`}>
+                    <p className="text-[11px] font-medium leading-none text-[#f0f0f0]">
+                      {item.period.split(" - ")[0]}
+                    </p>
+                    <p className="mt-1 text-[12px] font-semibold leading-tight">{item.company}</p>
+                    <p className="text-[11px] leading-tight text-[#e7e7e7]">{item.role}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-12">
+              {renderSidebarHeading("Languages")}
+              <ul className="mt-6 space-y-3 pl-5 text-[11px] leading-tight">
+                <li>Spanish - Native</li>
+                <li>English - C2</li>
+              </ul>
+            </section>
+          </aside>
+
+          <div className="h-full bg-[#f3f3f3] px-9 py-12 text-[#2f2f34]">
+            <header>
+              <h1 className="leading-[0.92] tracking-[0.01em]">
+                <span className="block text-[60px] font-bold">{firstName}</span>
+                <span className="block text-[58px] font-medium">
+                  {lastName || firstName}
+                </span>
+              </h1>
+              <p className="mt-3 text-[27px] font-medium leading-tight">{data.role}</p>
+            </header>
+
+            <section className="mt-10">
+              <h2 className="text-[36px] font-semibold leading-none">About me</h2>
+              <div className="mt-2 h-px bg-[#6a6a6f]" />
+              <div className="mt-4 space-y-4 text-[11px] leading-[1.55] text-[#5f5f64]">
+                {aboutParagraphs.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-8">
+              <h2 className="text-[36px] font-semibold leading-none">Experience</h2>
+              <div className="mt-2 h-px bg-[#6a6a6f]" />
+              {renderTimeline(firstPageTimeline, "classic-pro-page-1")}
+            </section>
+          </div>
+        </article>
+
+        {continuedTimelineChunks.map((chunk, pageIndex) => {
+          const isLastPage = pageIndex === continuedTimelineChunks.length - 1;
+
+          return (
+            <article
+              key={`classic-pro-page-${pageIndex + 2}`}
+              className="grid h-[1123px] w-[794px] grid-cols-[272px_1fr] overflow-hidden border border-[#2f2f34] bg-[#f3f3f3] shadow-[0_24px_55px_rgba(0,0,0,0.2)]"
+              style={pageFontStyle}
+            >
+              <aside className="h-full bg-[#2f2f34] px-10 py-12 text-[#f3f3f3]">
+                <section>
+                  {renderSidebarHeading("Skills")}
+                  <div className="mt-6 grid grid-cols-3 gap-x-3 gap-y-5">
+                    {skillsForSidebar.map((skill) => (
+                      <div key={skill} className="text-center">
+                        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-[#4f4f55] text-[11px] font-semibold">
+                          {skill.slice(0, 2).toUpperCase()}
+                        </div>
+                        <p className="mt-2 text-[10px] leading-tight text-[#efefef]">{skill}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="mt-12">
+                  {renderSidebarHeading("Social")}
+                  <div className="mt-6 space-y-5">
+                    {socialLinks.map((item) => (
+                      <div key={item.value}>
+                        <p className="text-[12px] font-semibold leading-none">{item.label}</p>
+                        <p className="mt-1 text-[10px] leading-tight underline decoration-[#d8d8d8] underline-offset-2">
+                          {item.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </aside>
+
+              <div className="h-full bg-[#f3f3f3] px-9 py-12 text-[#2f2f34]">
+                <section>
+                  {renderTimeline(chunk, `classic-pro-page-${pageIndex + 2}`)}
+                </section>
+
+                {isLastPage ? (
+                  <section className="mt-8">
+                    <h2 className="text-[36px] font-semibold leading-none">Highlights</h2>
+                    <div className="mt-2 h-px bg-[#6a6a6f]" />
+                    <div className="mt-6 space-y-5">
+                      {highlightItems.map((item) => (
+                        <article key={item.title}>
+                          <h3 className="text-[20px] font-semibold leading-tight">{item.title}</h3>
+                          <p className="mt-1 text-[11px] leading-[1.55] text-[#5f5f64]">
+                            {item.description}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <article className="mx-auto w-full max-w-[780px] rounded-2xl border border-border bg-white p-6 text-zinc-900 shadow-lg dark:bg-zinc-950 dark:text-zinc-100">
+        <header className="rounded-xl border border-zinc-300 p-4 dark:border-zinc-700">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold">{data.name}</h1>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">{data.role}</p>
+            </div>
+            <div className="grid gap-1 text-right text-xs text-zinc-600 dark:text-zinc-300">
+              <span>{data.contact.email}</span>
+              <span>{data.contact.phone}</span>
+              {data.contact.address ? <span>{data.contact.address}</span> : null}
+            </div>
+          </div>
+        </header>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <section className="rounded-xl bg-zinc-100 p-4 dark:bg-zinc-900">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em]">Summary</h2>
+            <p className="mt-2 text-sm leading-6">{data.summary}</p>
+          </section>
+          <section className="rounded-xl border border-zinc-300 p-4 dark:border-zinc-700">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em]">Skills</h2>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {topSkills.map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-md bg-zinc-200 px-2 py-1 text-xs dark:bg-zinc-800"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <section className="mt-4 rounded-xl border border-zinc-300 p-4 dark:border-zinc-700">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.14em]">Experience Highlights</h2>
+          <ul className="mt-2 grid gap-2 text-sm leading-6 md:grid-cols-2">
+            {topExperiences.map((experience) => (
+              <li key={experience} className="rounded-lg bg-zinc-100 px-3 py-2 dark:bg-zinc-900">
+                {experience}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="mt-4 rounded-xl border border-zinc-300 p-4 dark:border-zinc-700">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.14em]">Additional Notes</h2>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            {topNotes.map((note) => (
+              <span key={note} className="rounded-full border border-zinc-300 px-2 py-1 dark:border-zinc-600">
+                {note}
+              </span>
+            ))}
+          </div>
+        </section>
+      </article>
+    );
+  }
+
+  if (variant === "editorial") {
+    return (
+      <article className="mx-auto w-full max-w-[780px] border border-zinc-300 bg-[linear-gradient(180deg,#ffffff,#fafafa)] p-8 text-zinc-900 shadow-lg dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+        <header className="border-b border-zinc-300 pb-5 dark:border-zinc-700">
+          <p className="font-serif text-sm uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
+            Curriculum Vitae
+          </p>
+          <h1 className="mt-2 font-serif text-4xl leading-none">{data.name}</h1>
+          <p className="mt-3 text-sm uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+            {data.role}
+          </p>
+        </header>
+
+        <div className="mt-6 grid gap-8 md:grid-cols-[1.5fr_1fr]">
+          <div className="space-y-6">
+            <section>
+              <h2 className="font-serif text-xl">Profile</h2>
+              <p className="mt-2 text-sm leading-7">{data.summary}</p>
+            </section>
+
+            <section>
+              <h2 className="font-serif text-xl">Experience</h2>
+              <ol className="mt-3 space-y-4">
+                {topExperiences.map((experience, index) => (
+                  <li key={experience} className="border-l border-zinc-300 pl-4 dark:border-zinc-700">
+                    <p className="text-xs uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                      Case {index + 1}
+                    </p>
+                    <p className="mt-1 text-sm leading-6">{experience}</p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+
+          <aside className="space-y-6">
+            <section>
+              <h2 className="font-serif text-xl">Contact</h2>
+              <ul className="mt-2 space-y-2 text-sm">
+                <li>{data.contact.email}</li>
+                <li>{data.contact.phone}</li>
+                {data.contact.address ? <li>{data.contact.address}</li> : null}
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="font-serif text-xl">Topics</h2>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {topLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="rounded-sm border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h2 className="font-serif text-xl">Links</h2>
+              <ul className="mt-2 space-y-2 text-sm">
+                {data.social.map((item) => (
+                  <li key={item.value}>
+                    <span className="font-medium">{item.label}: </span>
+                    {item.value}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </aside>
+        </div>
+      </article>
+    );
+  }
+
+  if (variant === "gradient") {
+    return (
+      <article className="mx-auto w-full max-w-[780px] overflow-hidden rounded-2xl border border-sky-200 bg-[linear-gradient(140deg,#f8fcff_0%,#eef6ff_35%,#f9f7ff_100%)] p-7 text-slate-900 shadow-lg dark:border-sky-900 dark:bg-[linear-gradient(140deg,#101726_0%,#101c30_40%,#1a1630_100%)] dark:text-sky-50">
+        <header className="rounded-xl bg-white/80 p-5 backdrop-blur dark:bg-sky-950/40">
+          <p className="text-xs uppercase tracking-[0.2em] text-sky-700 dark:text-sky-300">
+            Creative Profile
+          </p>
+          <h1 className="mt-2 text-3xl font-bold">{data.name}</h1>
+          <p className="mt-1 text-sm text-sky-700 dark:text-sky-300">{data.role}</p>
+          <p className="mt-3 text-sm leading-6">{data.summary}</p>
+        </header>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <section className="rounded-xl bg-white/80 p-4 backdrop-blur dark:bg-sky-950/40">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-sky-700 dark:text-sky-300">
+              Contact
+            </h2>
+            <ul className="mt-2 space-y-1 text-sm">
+              <li>{data.contact.email}</li>
+              <li>{data.contact.phone}</li>
+              {data.contact.address ? <li>{data.contact.address}</li> : null}
+            </ul>
+          </section>
+
+          <section className="rounded-xl bg-white/80 p-4 backdrop-blur dark:bg-sky-950/40">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-sky-700 dark:text-sky-300">
+              Skills
+            </h2>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {topSkills.map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-full bg-sky-100 px-2 py-1 text-xs dark:bg-sky-900/60"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl bg-white/80 p-4 backdrop-blur dark:bg-sky-950/40">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-sky-700 dark:text-sky-300">
+              Links
+            </h2>
+            <ul className="mt-2 space-y-1 text-sm">
+              {data.social.map((item) => (
+                <li key={item.value}>
+                  <span className="font-semibold">{item.label}: </span>
+                  {item.value}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        <section className="mt-4 rounded-xl bg-white/80 p-5 backdrop-blur dark:bg-sky-950/40">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-sky-700 dark:text-sky-300">
+            Impact Highlights
+          </h2>
+          <ul className="mt-3 grid gap-2 text-sm leading-6 md:grid-cols-2">
+            {topExperiences.map((experience) => (
+              <li key={experience} className="rounded-lg bg-sky-100/80 px-3 py-2 dark:bg-sky-900/35">
+                {experience}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </article>
+    );
+  }
+
+  if (variant === "timeline") {
+    return (
+      <article className="mx-auto w-full max-w-[780px] rounded-2xl border border-border bg-white p-7 text-zinc-900 shadow-lg dark:bg-zinc-950 dark:text-zinc-100">
+        <header className="border-b border-zinc-300 pb-5 dark:border-zinc-700">
+          <h1 className="text-3xl font-semibold tracking-tight">{data.name}</h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{data.role}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {topLabels.map((label) => (
+              <span
+                key={label}
+                className="rounded-full bg-zinc-200 px-2.5 py-1 dark:bg-zinc-800"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        </header>
+
+        <div className="mt-6 grid gap-6 md:grid-cols-[1fr_2.2fr]">
+          <aside className="space-y-6">
+            <section>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500 dark:text-zinc-400">
+                Contact
+              </h2>
+              <ul className="mt-2 space-y-1 text-sm">
+                <li>{data.contact.email}</li>
+                <li>{data.contact.phone}</li>
+                {data.contact.address ? <li>{data.contact.address}</li> : null}
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500 dark:text-zinc-400">
+                Skills
+              </h2>
+              <ul className="mt-2 space-y-1 text-sm">
+                {topSkills.map((skill) => (
+                  <li key={skill}>{skill}</li>
+                ))}
+              </ul>
+            </section>
+          </aside>
+
+          <section>
+            <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500 dark:text-zinc-400">
+              Timeline
+            </h2>
+            <ol className="mt-3 space-y-4">
+              {topExperiences.map((experience, index) => (
+                <li key={experience} className="grid grid-cols-[22px_1fr] gap-3">
+                  <div className="relative">
+                    <div className="absolute left-1/2 top-2 h-full w-px -translate-x-1/2 bg-zinc-300 dark:bg-zinc-700" />
+                    <span className="relative mt-1 block h-2.5 w-2.5 rounded-full bg-zinc-900 dark:bg-zinc-100" />
+                  </div>
+                  <div className="rounded-xl border border-zinc-300 p-3 dark:border-zinc-700">
+                    <p className="text-xs uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                      Step {index + 1}
+                    </p>
+                    <p className="mt-1 text-sm leading-6">{experience}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <div className="mt-6 rounded-xl bg-zinc-100 p-4 dark:bg-zinc-900">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.14em]">Summary</h3>
+              <p className="mt-2 text-sm leading-6">{data.summary}</p>
+            </div>
+          </section>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="mx-auto w-full max-w-[780px] rounded-2xl border border-border bg-white p-8 text-zinc-900 shadow-lg dark:bg-zinc-950 dark:text-zinc-100">
+      <header className="border-b border-zinc-300 pb-5 dark:border-zinc-700">
+        <h1 className="text-4xl font-semibold tracking-tight">{data.name}</h1>
+        <p className="mt-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">{data.role}</p>
+        <div className="mt-3 flex flex-wrap gap-4 text-sm text-zinc-600 dark:text-zinc-300">
+          <span>{data.contact.email}</span>
+          <span>{data.contact.phone}</span>
+          {data.contact.address ? <span>{data.contact.address}</span> : null}
+        </div>
+      </header>
+
+      <section className="mt-6">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+          Professional Summary
+        </h2>
+        <p className="mt-2 text-sm leading-7">{data.summary}</p>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+          Experience
+        </h2>
+        <ul className="mt-3 space-y-3 text-sm leading-6">
+          {topExperiences.map((experience) => (
+            <li key={experience} className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-900">
+              {experience}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="mt-6 grid gap-4 md:grid-cols-2">
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+            Skills
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {topSkills.map((skill) => (
+              <span
+                key={skill}
+                className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs dark:border-zinc-700"
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+            Additional
+          </h2>
+          <ul className="mt-3 space-y-2 text-sm">
+            {topNotes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    </article>
   );
 }
 
@@ -356,6 +1091,7 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
   const BOTTOM_SCROLL_THRESHOLD = 80;
   const { t, i18n } = useTranslation();
   const [activeView, setActiveView] = useState<PanelView>("chat");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -375,6 +1111,18 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
 
   const canWrite = Boolean(cvId);
   const locale = useMemo(() => parseLocale(i18n.resolvedLanguage), [i18n.resolvedLanguage]);
+  const currentCv = useQuery(
+    api.cvs.getById,
+    cvId ? { cvId: cvId as Id<"cvs"> } : "skip"
+  );
+  const previewData = useMemo(
+    () => toResumePreviewData(currentCv, locale),
+    [currentCv, locale]
+  );
+  const selectedTemplate = useMemo(
+    () => CV_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? null,
+    [selectedTemplateId]
+  );
   const setMessageContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
       messageListRef(node);
@@ -412,6 +1160,10 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
       inputRef.current?.focus();
     });
   }, [cvId, locale, t]);
+
+  useEffect(() => {
+    setSelectedTemplateId(null);
+  }, [cvId]);
 
   useEffect(() => {
     if (activeView !== "chat") return;
@@ -573,7 +1325,10 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
                 aria-label={t("home.viewTemplates")}
                 title={t("home.viewTemplates")}
                 aria-pressed={activeView === "templates"}
-                onClick={() => setActiveView("templates")}
+                onClick={() => {
+                  setActiveView("templates");
+                  setSelectedTemplateId(null);
+                }}
                 className="h-9 w-9 rounded-lg"
               >
                 <LayoutTemplate className="h-4 w-4" />
@@ -584,7 +1339,12 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
         </div>
       </TooltipProvider>
 
-      <div className="relative mx-auto flex min-h-0 w-full max-w-[850px] flex-1 flex-col px-4 pb-4 pt-16 md:pb-6 md:pt-20">
+      <div
+        className={cn(
+          "relative mx-auto flex min-h-0 w-full flex-1 flex-col px-4 pb-4 pt-16 md:pb-6 md:pt-20",
+          activeView === "templates" ? "max-w-[1100px]" : "max-w-[850px]"
+        )}
+      >
         {activeView === "chat" ? (
           <>
             <div
@@ -670,45 +1430,96 @@ export function ChatPanel({ cvId }: ChatPanelProps) {
           </>
         ) : (
           <div className="min-h-0 flex-1">
-            <div className="mb-4 animate-fade-in-up">
-              <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                {t("home.templatesTitle", { defaultValue: "CV Templates" })}
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("home.templatesSubtitle", {
-                  defaultValue:
-                    "Preview classic and styled resume layouts. Selection actions are coming soon.",
-                })}
-              </p>
-            </div>
-
-            <div
-              ref={templateListRef}
-              className="chat-scroll grid max-h-full min-h-0 grid-cols-1 gap-4 overflow-y-auto pr-3 pb-2 md:grid-cols-2 md:pr-4 lg:grid-cols-3"
-            >
-              {CV_TEMPLATES.map((template, index) => (
-                <article
-                  key={template.id}
-                  className="animate-fade-in-up rounded-2xl border border-border bg-surface/90 p-3 shadow-sm backdrop-blur-sm"
-                  style={{ animationDelay: `${index * 45}ms` }}
-                >
-                  <TemplatePreview variant={template.variant} />
-                  <div className="mt-3 flex items-start justify-between gap-3">
+            {selectedTemplate ? (
+              <>
+                <div className="mb-4 animate-fade-in-up">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-sm font-semibold text-foreground">{template.name}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {template.kind === "classic"
-                          ? t("home.templateKindClassic")
-                          : t("home.templateKindStyled")}
+                      <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                        {t("home.templatesPreviewTitle", { defaultValue: "Template Preview" })}
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t("home.templatesPreviewSubtitle", {
+                          defaultValue:
+                            "The same resume data is rendered with a different structure per template.",
+                        })}
                       </p>
                     </div>
-                    <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                      {t("home.templatesComingSoon", { defaultValue: "Soon" })}
-                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => setSelectedTemplateId(null)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      {t("home.templatesBackButton", { defaultValue: "Back to templates" })}
+                    </Button>
                   </div>
-                </article>
-              ))}
-            </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {CV_TEMPLATES.map((template) => (
+                      <Button
+                        key={template.id}
+                        type="button"
+                        size="sm"
+                        variant={selectedTemplate.id === template.id ? "secondary" : "outline"}
+                        onClick={() => setSelectedTemplateId(template.id)}
+                        className="rounded-full"
+                      >
+                        {template.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="chat-scroll max-h-full min-h-0 overflow-auto pr-3 pb-2 md:pr-4">
+                  <TemplateFullPreview variant={selectedTemplate.variant} data={previewData} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 animate-fade-in-up">
+                  <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                    {t("home.templatesTitle", { defaultValue: "CV Templates" })}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("home.templatesSubtitle", {
+                      defaultValue:
+                        "Select any template to open a full preview with the same resume information.",
+                    })}
+                  </p>
+                </div>
+
+                <div
+                  ref={templateListRef}
+                  className="chat-scroll grid max-h-full min-h-0 grid-cols-1 gap-4 overflow-y-auto pr-3 pb-2 md:grid-cols-2 md:pr-4 lg:grid-cols-3"
+                >
+                  {CV_TEMPLATES.map((template, index) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className="animate-fade-in-up rounded-2xl border border-border bg-surface/90 p-3 text-left shadow-sm backdrop-blur-sm transition-transform duration-200 hover:-translate-y-0.5 hover:bg-surface"
+                      style={{ animationDelay: `${index * 45}ms` }}
+                      onClick={() => setSelectedTemplateId(template.id)}
+                    >
+                      <TemplatePreview variant={template.variant} />
+                      <div className="mt-3 flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">{template.name}</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {template.kind === "classic"
+                              ? t("home.templateKindClassic")
+                              : t("home.templateKindStyled")}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                          {t("home.templatesPreviewAction", { defaultValue: "Preview" })}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

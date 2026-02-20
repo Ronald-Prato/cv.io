@@ -1,23 +1,5 @@
-type CvSocial = {
-  linkedin?: string;
-  facebook?: string;
-  youtube?: string;
-  github?: string;
-};
-
-type CvContact = {
-  email: string;
-  phone: string;
-  address?: string;
-};
-
 export type CvForSemanticContext = {
-  labels: string[];
-  experiences: string[];
-  skills: string[];
-  social?: CvSocial;
-  contact: CvContact;
-  additionalInfo?: string;
+  description: string;
 };
 
 type ContextChunk = {
@@ -61,61 +43,19 @@ function tokenize(text: string): string[] {
 }
 
 function toChunks(cv: CvForSemanticContext): ContextChunk[] {
-  const chunks: ContextChunk[] = [
-    {
-      label: "Labels",
-      content: cv.labels.join(", "),
-    },
-    {
-      label: "Skills",
-      content: cv.skills.join(", "),
-    },
-  ];
+  const lines = cv.description
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-  cv.experiences.forEach((experience, index) => {
-    chunks.push({
-      label: `Experience ${index + 1}`,
-      content: experience,
-    });
-  });
-
-  if (cv.social) {
-    const socialText = [
-      cv.social.linkedin ? `LinkedIn: ${cv.social.linkedin}` : null,
-      cv.social.github ? `GitHub: ${cv.social.github}` : null,
-      cv.social.facebook ? `Facebook: ${cv.social.facebook}` : null,
-      cv.social.youtube ? `YouTube: ${cv.social.youtube}` : null,
-    ]
-      .filter(Boolean)
-      .join(", ");
-
-    if (socialText) {
-      chunks.push({
-        label: "Social",
-        content: socialText,
-      });
-    }
+  if (lines.length === 0) {
+    return [{ label: "Description", content: cv.description.trim() }];
   }
 
-  chunks.push({
-    label: "Contact",
-    content: [
-      `Email: ${cv.contact.email}`,
-      `Phone: ${cv.contact.phone}`,
-      cv.contact.address ? `Address: ${cv.contact.address}` : null,
-    ]
-      .filter(Boolean)
-      .join(", "),
-  });
-
-  if (cv.additionalInfo?.trim()) {
-    chunks.push({
-      label: "Additional Info",
-      content: cv.additionalInfo.trim(),
-    });
-  }
-
-  return chunks;
+  return lines.map((line, index) => ({
+    label: `Description ${index + 1}`,
+    content: line,
+  }));
 }
 
 function chunkScore(chunk: ContextChunk, queryTokens: Set<string>) {

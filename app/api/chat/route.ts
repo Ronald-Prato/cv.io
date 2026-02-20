@@ -39,26 +39,7 @@ type ChatCompletionResponse = {
 
 type UpdateCvToolArgs = {
   cvId: string;
-  labelsToAdd?: string[];
-  labelsToRemove?: string[];
-  experiencesToAdd?: string[];
-  experiencesToRemove?: string[];
-  skillsToAdd?: string[];
-  skillsToRemove?: string[];
-  additionalInfoToAdd?: string[];
-  additionalInfoToRemove?: string[];
-  additionalInfo?: string;
-  social?: {
-    linkedin?: string | null;
-    facebook?: string | null;
-    youtube?: string | null;
-    github?: string | null;
-  };
-  contact?: {
-    email?: string;
-    phone?: string;
-    address?: string | null;
-  };
+  description?: string;
 };
 
 type GetCvUpdatePromptToolArgs = {
@@ -122,9 +103,9 @@ function buildSystemPrompt(locale: AppLanguage): string {
     "Before any CV update, call get_cv_update_prompt to gather follow-up questions and enrichment guidance.",
     "To modify CV data, use the tool update_cv_by_id.",
     "Call get_cv_by_id only when the user asks for CV-specific data or analysis that requires reading the CV.",
-    "Call update_cv_by_id when the user asks to add, remove, or edit CV fields (experiences, skills, labels, contact, social, additionalInfo).",
+    "Each CV has a single editable field called description (markdown text).",
+    "Call update_cv_by_id when the user asks to edit CV content. Always provide the full replacement markdown in description.",
     "When information is incomplete or could be enriched, ask follow-up questions first and wait for the user response before calling update_cv_by_id.",
-    "Use additionalInfo for fields that do not fit the schema (for example: secondaryEmail: abc@gmail.com).",
     "Never modify createdAt. updatedAt must be managed by backend automatically.",
     "Do not call tools for greetings, small talk, or generic writing advice.",
     "Do not assume CV data from hidden context and do not invent CV fields.",
@@ -358,62 +339,18 @@ function parseJsonObject(raw: string): Record<string, unknown> {
   return {};
 }
 
-function asStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const result = value.filter(
-    (item): item is string => typeof item === "string" && item.trim().length > 0
-  );
-  return result.length ? result : undefined;
-}
-
 function parseUpdateCvToolArgs(
   rawArgs: string,
   fallbackCvId: string
 ): UpdateCvToolArgs {
   const parsed = parseJsonObject(rawArgs);
 
-  const social =
-    parsed.social && typeof parsed.social === "object" && !Array.isArray(parsed.social)
-      ? (parsed.social as Record<string, unknown>)
-      : undefined;
-  const contact =
-    parsed.contact && typeof parsed.contact === "object" && !Array.isArray(parsed.contact)
-      ? (parsed.contact as Record<string, unknown>)
-      : undefined;
-
   const result: UpdateCvToolArgs = {
     cvId: parseToolCvId(rawArgs, fallbackCvId),
-    labelsToAdd: asStringArray(parsed.labelsToAdd),
-    labelsToRemove: asStringArray(parsed.labelsToRemove),
-    experiencesToAdd: asStringArray(parsed.experiencesToAdd),
-    experiencesToRemove: asStringArray(parsed.experiencesToRemove),
-    skillsToAdd: asStringArray(parsed.skillsToAdd),
-    skillsToRemove: asStringArray(parsed.skillsToRemove),
-    additionalInfoToAdd: asStringArray(parsed.additionalInfoToAdd),
-    additionalInfoToRemove: asStringArray(parsed.additionalInfoToRemove),
   };
 
-  if (typeof parsed.additionalInfo === "string") {
-    result.additionalInfo = parsed.additionalInfo;
-  }
-
-  if (social) {
-    const socialPatch: NonNullable<UpdateCvToolArgs["social"]> = {};
-    for (const key of ["linkedin", "facebook", "youtube", "github"] as const) {
-      const value = social[key];
-      if (typeof value === "string") socialPatch[key] = value;
-      if (value === null) socialPatch[key] = null;
-    }
-    if (Object.keys(socialPatch).length) result.social = socialPatch;
-  }
-
-  if (contact) {
-    const contactPatch: NonNullable<UpdateCvToolArgs["contact"]> = {};
-    if (typeof contact.email === "string") contactPatch.email = contact.email;
-    if (typeof contact.phone === "string") contactPatch.phone = contact.phone;
-    if (typeof contact.address === "string") contactPatch.address = contact.address;
-    if (contact.address === null) contactPatch.address = null;
-    if (Object.keys(contactPatch).length) result.contact = contactPatch;
+  if (typeof parsed.description === "string") {
+    result.description = parsed.description;
   }
 
   return result;
@@ -516,7 +453,7 @@ export async function POST(request: NextRequest) {
         function: {
           name: "update_cv_by_id",
           description:
-            "Update CV fields. Supports add/remove operations for arrays and partial updates for contact/social/additionalInfo. createdAt must never be modified.",
+            "Replace the CV description markdown. createdAt must never be modified.",
           parameters: {
             type: "object",
             additionalProperties: false,
@@ -525,68 +462,13 @@ export async function POST(request: NextRequest) {
                 type: "string",
                 description: "Convex id of the cv document.",
               },
-              labelsToAdd: {
-                type: "array",
-                items: { type: "string" },
-              },
-              labelsToRemove: {
-                type: "array",
-                items: { type: "string" },
-              },
-              experiencesToAdd: {
-                type: "array",
-                items: { type: "string" },
-              },
-              experiencesToRemove: {
-                type: "array",
-                items: { type: "string" },
-              },
-              skillsToAdd: {
-                type: "array",
-                items: { type: "string" },
-              },
-              skillsToRemove: {
-                type: "array",
-                items: { type: "string" },
-              },
-              additionalInfoToAdd: {
-                type: "array",
-                items: { type: "string" },
-                description:
-                  "Plain text entries for extra data outside schema, e.g. secondaryEmail: abc@gmail.com",
-              },
-              additionalInfoToRemove: {
-                type: "array",
-                items: { type: "string" },
-                description:
-                  "Remove exact plain text entries previously stored in additionalInfo.",
-              },
-              additionalInfo: {
+              description: {
                 type: "string",
                 description:
-                  "Optional full replacement for additionalInfo plain text (can include multiple lines).",
-              },
-              social: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  linkedin: { type: ["string", "null"] },
-                  facebook: { type: ["string", "null"] },
-                  youtube: { type: ["string", "null"] },
-                  github: { type: ["string", "null"] },
-                },
-              },
-              contact: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  email: { type: "string" },
-                  phone: { type: "string" },
-                  address: { type: ["string", "null"] },
-                },
+                  "Complete markdown content that replaces the current CV description.",
               },
             },
-            required: ["cvId"],
+            required: ["cvId", "description"],
           },
         },
       },
@@ -611,7 +493,7 @@ export async function POST(request: NextRequest) {
               },
               sectionHint: {
                 type: "string",
-                description: "Optional section/topic being updated (skill, experience, contact, etc).",
+                description: "Optional section/topic being updated.",
               },
             },
             required: ["cvId"],
@@ -680,19 +562,12 @@ export async function POST(request: NextRequest) {
       const updateArgs = parseUpdateCvToolArgs(toolCall.function.arguments, body.cvId);
       toolArgsForOpenAI = updateArgs;
       try {
+        if (!updateArgs.description?.trim()) {
+          return jsonError(400, dict.chatInvalidRequest);
+        }
         toolResult = await convex.mutation(api.cvs.updateById, {
           cvId: updateArgs.cvId as Id<"cvs">,
-          labelsToAdd: updateArgs.labelsToAdd,
-          labelsToRemove: updateArgs.labelsToRemove,
-          experiencesToAdd: updateArgs.experiencesToAdd,
-          experiencesToRemove: updateArgs.experiencesToRemove,
-          skillsToAdd: updateArgs.skillsToAdd,
-          skillsToRemove: updateArgs.skillsToRemove,
-          additionalInfoToAdd: updateArgs.additionalInfoToAdd,
-          additionalInfoToRemove: updateArgs.additionalInfoToRemove,
-          additionalInfo: updateArgs.additionalInfo,
-          social: updateArgs.social,
-          contact: updateArgs.contact,
+          description: updateArgs.description,
         });
       } catch (error) {
         if (isCvNotFoundError(error)) {

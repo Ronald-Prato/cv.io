@@ -1,5 +1,5 @@
-import { ChatPanel } from "@/components/chat-panel";
+import { HomeUploadDropzone } from "@/components/home-upload-dropzone";
 
 export default function HomePage() {
-  return <ChatPanel />;
+  return <HomeUploadDropzone />;
 }

@@ -14,23 +14,7 @@ export default defineSchema({
   cvs: defineTable({
     userId: v.optional(v.id("users")),
     sourceUploadId: v.optional(v.id("cvUploads")),
-    labels: v.array(v.string()),
-    experiences: v.array(v.string()),
-    skills: v.array(v.string()),
-    social: v.optional(
-      v.object({
-        linkedin: v.optional(v.string()),
-        facebook: v.optional(v.string()),
-        youtube: v.optional(v.string()),
-        github: v.optional(v.string()),
-      }),
-    ),
-    contact: v.object({
-      email: v.string(),
-      phone: v.string(),
-      address: v.optional(v.string()),
-    }),
-    additionalInfo: v.optional(v.string()),
+    description: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
